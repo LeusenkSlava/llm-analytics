@@ -296,11 +296,11 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT round(sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6, 4) AS value FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT round(sum(c.cost_${currency}), 4) AS value FROM analytics.llm_calls_cost c WHERE $__timeFilter(ts)",
           "refId": "A"
         }
       ],
-      "title": "Стоимость, USD",
+      "title": "Стоимость, ${currency:text}",
       "type": "stat"
     },
     {
@@ -624,7 +624,26 @@
   "refresh": "",
   "schemaVersion": 42,
   "tags": ["llm", "overview"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "RUB", "value": "rub" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Валюта",
+        "multi": false,
+        "name": "currency",
+        "options": [
+          { "selected": true, "text": "RUB", "value": "rub" },
+          { "selected": false, "text": "CNY", "value": "cny" },
+          { "selected": false, "text": "USD", "value": "usd" }
+        ],
+        "query": "RUB : rub,CNY : cny,USD : usd",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
   "time": { "from": "now-7d", "to": "now" },
   "timepicker": {},
   "timezone": "",

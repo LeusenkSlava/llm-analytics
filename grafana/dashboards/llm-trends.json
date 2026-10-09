@@ -76,11 +76,11 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6 / count() AS avg_cost_usd FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, sum(c.cost_${currency}) / count() AS avg_cost_usd FROM analytics.llm_calls_cost c WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
-      "title": "Средняя цена за вызов, USD",
+      "title": "Средняя цена за вызов, ${currency:text}",
       "type": "timeseries"
     },
     {
@@ -328,7 +328,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, step, sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6 AS usd FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE $__timeFilter(ts) GROUP BY time, step ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, step, sum(c.cost_${currency}) AS cost FROM analytics.llm_calls_cost c WHERE $__timeFilter(ts) GROUP BY time, step ORDER BY time",
           "refId": "A"
         }
       ],
@@ -391,11 +391,11 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6 / count(DISTINCT entity_id) AS avg_novel_cost_usd FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE operation = 'create_novel' AND entity_id != '' AND $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, sum(c.cost_${currency}) / count(DISTINCT entity_id) AS avg_novel_cost_usd FROM analytics.llm_calls_cost c WHERE operation = 'create_novel' AND entity_id != '' AND $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
-      "title": "Средняя цена новой новеллы во времени, USD",
+      "title": "Средняя цена новой новеллы во времени, ${currency:text}",
       "type": "timeseries"
     }
   ],
@@ -403,7 +403,26 @@
   "refresh": "",
   "schemaVersion": 42,
   "tags": ["llm", "trends"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "RUB", "value": "rub" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Валюта",
+        "multi": false,
+        "name": "currency",
+        "options": [
+          { "selected": true, "text": "RUB", "value": "rub" },
+          { "selected": false, "text": "CNY", "value": "cny" },
+          { "selected": false, "text": "USD", "value": "usd" }
+        ],
+        "query": "RUB : rub,CNY : cny,USD : usd",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
   "time": { "from": "now-30d", "to": "now" },
   "timepicker": {},
   "timezone": "",

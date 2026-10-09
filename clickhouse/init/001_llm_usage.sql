@@ -50,21 +50,5 @@ EXCEPT
 ts
 FROM analytics.llm_calls_queue;
 
--- 4. Цены моделей (USD за 1M токенов)
-CREATE TABLE analytics.model_prices (
-    model String,
-    input_per_m Float64,
-    cached_input_per_m Float64,
-    output_per_m Float64
-) ENGINE = ReplacingMergeTree
-ORDER BY model;
-
-INSERT INTO
-    analytics.model_prices
-VALUES (
-        'deepseek-v4-flash',
-        0.30,
-        0.006,
-        1.20
-    );
--- впишите актуальные цены
+-- 4. Цены моделей, курсы валют и представление analytics.llm_calls_cost
+--    создаются в 002_cost_peak_offpeak.sql (там же — учёт peak/off-peak).

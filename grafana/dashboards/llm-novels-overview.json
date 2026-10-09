@@ -107,11 +107,11 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT round(sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6, 6) AS value FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE entity_id != '' AND $__timeFilter(ts)",
+          "rawSql": "SELECT round(sum(c.cost_${currency}), 6) AS value FROM analytics.llm_calls_cost c WHERE entity_id != '' AND $__timeFilter(ts)",
           "refId": "A"
         }
       ],
-      "title": "Стоимость всего, USD",
+      "title": "Стоимость всего, ${currency:text}",
       "type": "stat"
     },
     {
@@ -248,11 +248,11 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT round(sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6 / uniqExact(entity_id), 6) AS value FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE entity_id != '' AND $__timeFilter(ts)",
+          "rawSql": "SELECT round(sum(c.cost_${currency}) / uniqExact(entity_id), 6) AS value FROM analytics.llm_calls_cost c WHERE entity_id != '' AND $__timeFilter(ts)",
           "refId": "A"
         }
       ],
-      "title": "Средняя стоимость новеллы, USD",
+      "title": "Средняя стоимость новеллы, ${currency:text}",
       "type": "stat"
     },
     {
@@ -340,7 +340,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT entity_id, uniqExactIf(operation, operation != 'create_novel') AS scenes, round(sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6, 6) AS usd, sum(prompt_tokens + completion_tokens) AS tokens, count() AS calls, round(sum(duration_ms) / 1000, 1) AS seconds, min(ts) AS first_seen, max(ts) AS last_seen FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY entity_id ORDER BY usd DESC",
+          "rawSql": "SELECT entity_id, uniqExactIf(operation, operation != 'create_novel') AS scenes, round(sum(c.cost_${currency}), 6) AS cost, sum(prompt_tokens + completion_tokens) AS tokens, count() AS calls, round(sum(duration_ms) / 1000, 1) AS seconds, min(ts) AS first_seen, max(ts) AS last_seen FROM analytics.llm_calls_cost c WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY entity_id ORDER BY cost DESC",
           "refId": "A"
         }
       ],
@@ -404,7 +404,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT operation, round(sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6, 6) AS usd FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY operation ORDER BY usd DESC",
+          "rawSql": "SELECT operation, round(sum(c.cost_${currency}), 6) AS cost FROM analytics.llm_calls_cost c WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY operation ORDER BY cost DESC",
           "refId": "A"
         }
       ],
@@ -531,7 +531,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, sum((c.prompt_tokens - c.cached_tokens) * p.input_per_m + c.cached_tokens * p.cached_input_per_m + c.completion_tokens * p.output_per_m) / 1e6 AS usd FROM analytics.llm_calls c LEFT JOIN analytics.model_prices p FINAL USING model WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, sum(c.cost_${currency}) AS cost FROM analytics.llm_calls_cost c WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -607,7 +607,26 @@
   "refresh": "",
   "schemaVersion": 42,
   "tags": ["llm", "novels"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "RUB", "value": "rub" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Валюта",
+        "multi": false,
+        "name": "currency",
+        "options": [
+          { "selected": true, "text": "RUB", "value": "rub" },
+          { "selected": false, "text": "CNY", "value": "cny" },
+          { "selected": false, "text": "USD", "value": "usd" }
+        ],
+        "query": "RUB : rub,CNY : cny,USD : usd",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
   "time": { "from": "now-30d", "to": "now" },
   "timepicker": {},
   "timezone": "",
