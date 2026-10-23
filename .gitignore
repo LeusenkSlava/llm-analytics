@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+docs/
+
+# llm-analytics: сгенерированные отчёты репортёра (make report ARGS="<id> --responses")
+llm_responses_*.md

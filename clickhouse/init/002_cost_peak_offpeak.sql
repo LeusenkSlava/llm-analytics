@@ -154,6 +154,7 @@ SELECT
     -- колонки llm_calls перечислены явно: при JOIN с model_prices
     -- ClickHouse иначе переименовывает model в `c.model`
     c.ts,
+    c.event_id,
     c.service,
     c.operation,
     c.step,
@@ -162,18 +163,23 @@ SELECT
     c.job_id,
     c.prompt_tokens,
     c.completion_tokens,
+    c.reasoning_tokens,
     c.cached_tokens,
     c.duration_ms,
     c.llm_requests,
     c.tool_calls,
     c.error,
+    c.scene_order,
+    -- Праздник проверяется явным подзапросом, а не через LEFT JOIN + h.date IS NULL:
+    -- при join_use_nulls=0 (по умолчанию) непопавшая в JOIN дата получает не NULL,
+    -- а default-значение 1970-01-01, поэтому `h.date IS NULL` всегда ложно.
     toUInt8(
         toDayOfWeek(c.ts) BETWEEN 1 AND 5
         AND (
             toHour(c.ts) BETWEEN 1 AND 3
             OR toHour(c.ts) BETWEEN 6 AND 9
         )
-        AND h.date = toDate('1970-01-01')
+        AND toDate(c.ts) NOT IN (SELECT date FROM analytics.cn_holidays)
     ) AS is_peak,
     if(is_peak, p.input_peak, p.input_offpeak) AS price_input,
     if(
@@ -193,12 +199,15 @@ SELECT
         10
     ) AS cost_usd,
     round(cost_usd * rates.cny_per_usd, 10) AS cost_cny,
-    round(cost_usd * rates.rub_per_usd, 10) AS cost_rub
-FROM analytics.llm_calls AS c
+    round(cost_usd * rates.rub_per_usd, 10) AS cost_rub,
+    -- Экономия кэша: сколько бы стоили cached-токены по цене cache-miss
+    -- минус фактическая цена cache-hit.
+    round(c.cached_tokens * (price_input - price_cached) / 1e6, 10) AS cache_savings_usd,
+    round(cache_savings_usd * rates.cny_per_usd, 10) AS cache_savings_cny,
+    round(cache_savings_usd * rates.rub_per_usd, 10) AS cache_savings_rub
+FROM analytics.llm_calls AS c FINAL
 LEFT JOIN analytics.model_prices AS p FINAL
     ON c.model = p.model
-LEFT JOIN analytics.cn_holidays AS h
-    ON toDate(c.ts) = h.date
 CROSS JOIN (
     SELECT
         maxIf(per_usd, code = 'CNY') AS cny_per_usd,

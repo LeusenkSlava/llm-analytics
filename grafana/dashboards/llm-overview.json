@@ -60,7 +60,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT count() AS value FROM analytics.llm_calls WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT count() AS value FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -107,7 +107,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(prompt_tokens + completion_tokens) AS value FROM analytics.llm_calls WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT sum(prompt_tokens + completion_tokens) AS value FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -154,7 +154,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 2) AS value FROM analytics.llm_calls WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 2) AS value FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -202,7 +202,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT round(countIf(error != '') / count() * 100, 3) AS value FROM analytics.llm_calls WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT round(countIf(error != '') / count() * 100, 3) AS value FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -249,7 +249,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT round(avg(duration_ms), 1) AS value FROM analytics.llm_calls WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT round(avg(duration_ms), 1) AS value FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -359,7 +359,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, count() AS requests FROM analytics.llm_calls WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, count() AS requests FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -422,7 +422,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, sum(prompt_tokens) AS prompt, sum(completion_tokens) AS completion, sum(cached_tokens) AS cached FROM analytics.llm_calls WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, sum(prompt_tokens) AS prompt, sum(completion_tokens) AS completion, sum(cached_tokens) AS cached FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -485,7 +485,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, round(countIf(error != '') / count() * 100, 3) AS error_rate, quantile(0.95)(duration_ms) AS p95_ms FROM analytics.llm_calls WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, round(countIf(error != '') / count() * 100, 3) AS error_rate, quantile(0.95)(duration_ms) AS p95_ms FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -548,7 +548,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 2) AS cache_hit_pct FROM analytics.llm_calls WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 2) AS cache_hit_pct FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -612,7 +612,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT step, sum(prompt_tokens + completion_tokens) AS tokens, sum(duration_ms) / 1000 AS seconds FROM analytics.llm_calls WHERE $__timeFilter(ts) GROUP BY step ORDER BY tokens DESC",
+          "rawSql": "SELECT step, sum(prompt_tokens + completion_tokens) AS tokens, sum(duration_ms) / 1000 AS seconds FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts) GROUP BY step ORDER BY tokens DESC",
           "refId": "A"
         }
       ],

@@ -139,7 +139,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, avg(prompt_tokens) AS avg_prompt, avg(completion_tokens) AS avg_completion FROM analytics.llm_calls WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, avg(prompt_tokens) AS avg_prompt, avg(completion_tokens) AS avg_completion FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -202,7 +202,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, avg(prompt_tokens - cached_tokens) AS avg_cache_miss, avg(cached_tokens) AS avg_cache_hit FROM analytics.llm_calls WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, avg(prompt_tokens - cached_tokens) AS avg_cache_miss, avg(cached_tokens) AS avg_cache_hit FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -265,7 +265,7 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 2) AS cache_hit_pct FROM analytics.llm_calls WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 2) AS cache_hit_pct FROM analytics.llm_calls FINAL WHERE $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -391,11 +391,11 @@
           "editorType": "sql",
           "format": 0,
           "queryType": "timeseries",
-          "rawSql": "SELECT $__timeInterval(ts) AS time, sum(c.cost_${currency}) / count(DISTINCT entity_id) AS avg_novel_cost_usd FROM analytics.llm_calls_cost c WHERE operation = 'create_novel' AND entity_id != '' AND $__timeFilter(ts) GROUP BY time ORDER BY time",
+          "rawSql": "SELECT $__timeInterval(ts) AS time, sum(c.cost_${currency}) / count(DISTINCT entity_id) AS avg_novel_cost FROM analytics.llm_calls_cost c WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
-      "title": "Средняя цена новой новеллы во времени, ${currency:text}",
+      "title": "Средняя цена новеллы во времени, ${currency:text}",
       "type": "timeseries"
     }
   ],

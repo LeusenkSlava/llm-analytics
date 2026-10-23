@@ -29,21 +29,33 @@
         "defaults": {
           "custom": {
             "align": "auto",
-            "cellOptions": { "type": "auto" },
-            "footer": { "reducers": [] },
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
             "inspect": false
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
         "cellHeight": "sm",
@@ -76,13 +88,21 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 9 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 9
+      },
       "id": 2,
       "options": {
         "colorMode": "value",
@@ -90,7 +110,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -123,13 +145,21 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 9 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 9
+      },
       "id": 3,
       "options": {
         "colorMode": "value",
@@ -137,7 +167,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -152,7 +184,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT sum(prompt_tokens + completion_tokens) AS value FROM analytics.llm_calls WHERE entity_id != '' AND entity_id IN ($entity_id) AND $__timeFilter(ts)",
+          "rawSql": "SELECT sum(prompt_tokens + completion_tokens) AS value FROM analytics.llm_calls FINAL WHERE entity_id != '' AND entity_id IN ($entity_id) AND $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -170,13 +202,21 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 9 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 9
+      },
       "id": 4,
       "options": {
         "colorMode": "value",
@@ -184,7 +224,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -199,7 +241,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT count() AS value FROM analytics.llm_calls WHERE entity_id != '' AND entity_id IN ($entity_id) AND $__timeFilter(ts)",
+          "rawSql": "SELECT count() AS value FROM analytics.llm_calls FINAL WHERE entity_id != '' AND entity_id IN ($entity_id) AND $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -217,13 +259,21 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 9 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 9
+      },
       "id": 5,
       "options": {
         "colorMode": "value",
@@ -231,7 +281,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -246,7 +298,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT round(sum(duration_ms) / 1000, 1) AS value FROM analytics.llm_calls WHERE entity_id != '' AND entity_id IN ($entity_id) AND $__timeFilter(ts)",
+          "rawSql": "SELECT round(sum(duration_ms) / 1000, 1) AS value FROM analytics.llm_calls FINAL WHERE entity_id != '' AND entity_id IN ($entity_id) AND $__timeFilter(ts)",
           "refId": "A"
         }
       ],
@@ -260,7 +312,9 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
@@ -271,33 +325,58 @@
             "barWidthFactor": 0.6,
             "fillOpacity": 80,
             "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
             "lineWidth": 1,
-            "scaleDistribution": { "type": "linear" },
-            "thresholdsStyle": { "mode": "off" }
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
       "id": 6,
       "options": {
         "barRadius": 0,
         "barWidth": 0.97,
         "fullHighlight": false,
         "groupWidth": 0.7,
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": false },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "orientation": "auto",
         "showValue": "auto",
         "stacking": "none",
-        "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
@@ -324,7 +403,9 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
@@ -336,33 +417,61 @@
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
             "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "auto",
             "showValues": false,
             "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
       "id": 7,
       "options": {
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" }
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "targets": [
         {
@@ -389,21 +498,33 @@
         "defaults": {
           "custom": {
             "align": "auto",
-            "cellOptions": { "type": "auto" },
-            "footer": { "reducers": [] },
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
             "inspect": false
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
       "id": 8,
       "options": {
         "cellHeight": "sm",
@@ -432,7 +553,9 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
@@ -443,33 +566,58 @@
             "barWidthFactor": 0.6,
             "fillOpacity": 80,
             "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
             "lineWidth": 1,
-            "scaleDistribution": { "type": "linear" },
-            "thresholdsStyle": { "mode": "off" }
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
       "id": 9,
       "options": {
         "barRadius": 0,
         "barWidth": 0.97,
         "fullHighlight": false,
         "groupWidth": 0.7,
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": false },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "orientation": "auto",
         "showValue": "auto",
         "stacking": "none",
-        "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
@@ -498,21 +646,33 @@
         "defaults": {
           "custom": {
             "align": "auto",
-            "cellOptions": { "type": "auto" },
-            "footer": { "reducers": [] },
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
             "inspect": false
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
       "id": 10,
       "options": {
         "cellHeight": "sm",
@@ -541,7 +701,9 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
@@ -552,33 +714,58 @@
             "barWidthFactor": 0.6,
             "fillOpacity": 80,
             "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
             "lineWidth": 1,
-            "scaleDistribution": { "type": "linear" },
-            "thresholdsStyle": { "mode": "off" }
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 }
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 38 },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
       "id": 11,
       "options": {
         "barRadius": 0,
         "barWidth": 0.97,
         "fullHighlight": false,
         "groupWidth": 0.7,
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
         "orientation": "auto",
         "showValue": "auto",
         "stacking": "none",
-        "tooltip": { "hideZeros": false, "mode": "multi", "sort": "desc" },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        },
         "xTickLabelRotation": -45,
         "xTickLabelSpacing": 0
       },
@@ -599,18 +786,80 @@
         {
           "id": "partitionByValues",
           "options": {
-            "fields": ["entity_id"]
+            "fields": [
+              "entity_id"
+            ]
           }
         }
       ],
       "title": "Сравнение новелл по операциям",
       "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 12,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT scene_order, round(sum(c.cost_${currency}), 6) AS cost, sum(prompt_tokens + completion_tokens) AS tokens, count() AS calls FROM analytics.llm_calls_cost c WHERE entity_id != '' AND entity_id IN ($entity_id) AND scene_order > 0 AND $__timeFilter(ts) GROUP BY scene_order ORDER BY scene_order",
+          "refId": "A"
+        }
+      ],
+      "title": "Цена за сцену (выбранная новелла)",
+      "type": "table"
     }
   ],
   "preload": false,
   "refresh": "",
   "schemaVersion": 42,
-  "tags": ["llm", "novels"],
+  "tags": [
+    "llm",
+    "novels"
+  ],
   "templating": {
     "list": [
       {
@@ -624,7 +873,7 @@
           "text": "1",
           "value": "1"
         },
-        "definition": "SELECT entity_id FROM analytics.llm_calls WHERE entity_id != '' GROUP BY entity_id ORDER BY toUInt64OrZero(entity_id)",
+        "definition": "SELECT entity_id FROM analytics.llm_calls FINAL WHERE entity_id != '' GROUP BY entity_id ORDER BY toUInt64OrZero(entity_id)",
         "hide": 0,
         "includeAll": false,
         "label": "Новелла",
@@ -639,7 +888,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT entity_id FROM analytics.llm_calls WHERE entity_id != '' GROUP BY entity_id ORDER BY toUInt64OrZero(entity_id)",
+          "rawSql": "SELECT entity_id FROM analytics.llm_calls FINAL WHERE entity_id != '' GROUP BY entity_id ORDER BY toUInt64OrZero(entity_id)",
           "refId": "A"
         },
         "refresh": 2,
@@ -674,16 +923,32 @@
         "type": "custom"
       },
       {
-        "current": { "selected": true, "text": "RUB", "value": "rub" },
+        "current": {
+          "selected": true,
+          "text": "RUB",
+          "value": "rub"
+        },
         "hide": 0,
         "includeAll": false,
         "label": "Валюта",
         "multi": false,
         "name": "currency",
         "options": [
-          { "selected": true, "text": "RUB", "value": "rub" },
-          { "selected": false, "text": "CNY", "value": "cny" },
-          { "selected": false, "text": "USD", "value": "usd" }
+          {
+            "selected": true,
+            "text": "RUB",
+            "value": "rub"
+          },
+          {
+            "selected": false,
+            "text": "CNY",
+            "value": "cny"
+          },
+          {
+            "selected": false,
+            "text": "USD",
+            "value": "usd"
+          }
         ],
         "query": "RUB : rub,CNY : cny,USD : usd",
         "skipUrlSync": false,
@@ -691,10 +956,13 @@
       }
     ]
   },
-  "time": { "from": "now-30d", "to": "now" },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "",
-  "title": "LLM Novels",
+  "title": "LLM Novels / Новелла (drill-down)",
   "uid": "llm-novels",
   "version": 1
 }

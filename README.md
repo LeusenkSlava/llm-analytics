@@ -5,11 +5,50 @@ ClickHouse их накапливает, Grafana показывает дашбо�
 
 ## Состав
 
-- `clickhouse/init/001_llm_usage.sql` — базовые таблицы `llm_calls` (Kafka → MV → MergeTree).
+- `clickhouse/init/001_llm_usage.sql` — базовые таблицы `llm_calls` (ReplacingMergeTree),
+  очередь Kafka `llm_calls_queue` и материализованное представление `llm_calls_mv`.
 - `clickhouse/init/002_cost_peak_offpeak.sql` — цены моделей, китайские праздники,
   курсы валют и представление `analytics.llm_calls_cost` со стоимостью вызова.
+- `clickhouse/init/003_reasoning_and_scores.sql` — guard-колонка `reasoning_tokens`
+  и удаление выпиленного скоринга сюжета (`novel_scores`).
+- `clickhouse/init/004_schema_v2.sql` — одноразовая миграция на v2 (см. ниже).
 - `grafana/dashboards/*.json` — дашборды (провижнятся из файлов автоматически).
+- `scripts/report.py` — репортёр итогов/ответов (`make report`).
+- `scripts/verify.py` — health-check полноты доставки (`make verify`).
 - `docker-compose.yml` — ClickHouse + Grafana (за Traefik, `grafana.localhost`).
+
+## Схема v2 (что изменилось)
+
+- `llm_calls` — **ReplacingMergeTree** по `event_id`: один LLM-вызов = одна строка,
+  повторная доставка (ретрай/outbox) не дублирует. Запросы к таблице идут через
+  `FINAL` (или через представление `llm_calls_cost`, которое уже содержит `FINAL`).
+- Новые колонки:
+  - `event_id` — уникальный id вызова (дедуп);
+  - `scene_order` — `0` для `create_novel`/настройки, `N` для сцены `scene_N`;
+  - `response` — текст ответа LLM (roadmap/сцена/диалог), `''` для обычных вызовов.
+- `TTL toDate(ts) + INTERVAL 90 DAY` — данные живут 90 дней (настраивается в `001`/`004`).
+- Очередь Kafka читает с `input_format_skip_unknown_fields = 1` — старые события
+  без новых полей не ломают парсинг.
+- Скоринг сюжета (`novel_scores`, `novel_scores_composite`, дашборд «Сюжет») удалён.
+
+## Дашборды
+
+| Дашборд | uid | Назначение |
+| ------- | --- | ---------- |
+| LLM Overview | `llm-overview` | Здоровье: запросы/токены/cache/ошибки/латентность |
+| LLM Cost / Обзор и итоги | `llm-cost` | Стоимость и юнит-экономика: итоги, цена за сцену/новеллу/шаг, разбивка input/cached/output, экономия кэша, доля reasoning |
+| LLM Novels / drill-down | `llm-novels` | Разбор одной новеллы: цена за сцену, по операциям/шагам |
+| LLM Scenes / Средняя цена сцены по новелам | `llm-scene-cost` | Цена одной сцены в токенах по всем новеллам: среднее/медиана, детали по сценам |
+| LLM Trends | `llm-trends` | Средние по времени |
+
+Число сцен новеллы считается как `max(scene_order)` (настройка `create_novel`
+не смешивается со сценами — у неё `scene_order = 0`).
+
+На дашборде `llm-scene-cost` цена сцены — это `prompt_tokens + completion_tokens`
+по всем вызовам сцены (`scene_order > 0`), усреднённая по сценам новеллы.
+Это линейный график: по X — номер новеллы (от первой к последней), по Y — средняя
+цена одной сцены в токенах. Новеллы без сцен (только настройка/roadmap) на графике
+не показываются: для них средняя цена сцены не определена.
 
 ## Запуск
 
@@ -18,13 +57,46 @@ make upd      # поднять стек
 make down     # остановить
 ```
 
-Для существующей базы, где `002` ещё не применялся, применить миграцию:
+## Миграция на v2 (существующая база)
 
 ```bash
 make ch-migrate
 ```
 
-Команда идемпотентна — её можно запускать повторно.
+Команда идемпотентна. Она:
+
+1. применяет `004_schema_v2.sql` — пересоздаёт `llm_calls` на ReplacingMergeTree
+   (движок нельзя поменять через `ALTER`), **только если таблица ещё на старом движке**;
+   повторные запуски этот шаг пропускают;
+2. применяет `002` (цены/курсы/представление стоимости);
+3. применяет `003` (guard-колонка `reasoning_tokens` + удаление скоринга).
+
+> Пересоздание `llm_calls` дропает текущие данные намеренно: источник истины —
+> `llm_logs/*.jsonl` (он полнее), история перезаливается разовым импортом
+> `ai_plot_generator/scripts/migrate_logs.py` (задача B7 генератора).
+
+Для свежей базы (`make up` на пустом томе) init-скрипты создают схему v2 сразу,
+миграция не нужна.
+
+## Репортёр
+
+```bash
+make report                        # итоги: токены/стоимость/ошибки по всем новеллам
+make report ARGS="12"              # все запросы + токены + стоимость по новелле
+make report ARGS="12 --responses"  # ответы LLM (roadmap/сцены/диалоги) → llm_responses_12.md
+```
+
+Прямой вызов: `python3 scripts/report.py [<novel_id>] [--responses]`.
+
+## Health-check полноты
+
+```bash
+make verify
+```
+
+Выводит `uniqExact(event_id)` в `llm_calls`, число событий, ожидающих в spool
+(`llm_logs/outbox.jsonl`), и «расхождение» (pending → ещё не в CH). В штатном
+режиме расхождение 0. От исторических файлов `llm_logs/*.jsonl` не зависит.
 
 ## Как считается стоимость
 
@@ -53,10 +125,26 @@ DeepSeek (модель `deepseek-flash` / DeepSeek-V4.1-Flash) тарифици�
 
 - `is_peak` — 1, если вызов попал в peak-окно;
 - `cost_usd`, `cost_cny`, `cost_rub` — стоимость вызова;
-- `cost_input_usd`, `cost_cached_usd`, `cost_output_usd` — разбивка по частям.
+- `cost_input_usd`, `cost_cached_usd`, `cost_output_usd` — разбивка по частям;
+- `cache_savings_usd`, `cache_savings_cny`, `cache_savings_rub` — экономия кэша
+  (сколько бы стоили cached-токены по цене cache-miss минус фактическая цена hit).
 
 Дашборды обращаются к этому представлению, поэтому формула стоимости
 не дублируется по панелям.
+
+> Примечание про `is_peak`: проверка «не праздник» сделана явным подзапросом
+> `toDate(ts) NOT IN (SELECT date FROM cn_holidays)`, а не через
+> `LEFT JOIN … + h.date IS NULL`. При `join_use_nulls=0` (по умолчанию)
+> непопавшая в JOIN дата получает default-значение `1970-01-01`, а не `NULL`,
+> поэтому проверка `IS NULL` всегда ложна и пиковый тариф не применился бы никогда.
+
+## Сцены и reasoning
+
+- **Сцена** — колонка `scene_order` (`0` = настройка, `N` = сцена N). Первая сцена
+  больше не прячется в `create_novel`: генераторы пишут `scene_1` и `scene_order = 1`.
+  Число сцен новеллы = `max(scene_order)`.
+- **`reasoning_tokens`** — колонка в `llm_calls` (проброшена из `llm_log`). Доля
+  reasoning в output считается как `reasoning_tokens / completion_tokens`.
 
 ## Валюты
 
@@ -85,3 +173,4 @@ make rates USD_CNY=6.67 USD_RUB=84.97
 - **Фактическое имя модели** — генераторы пишут устаревший алиас
   `deepseek-v4-flash`; DeepSeek обслуживает его той же моделью по цене Flash,
   поэтому в `model_prices` есть обе записи.
+- **TTL** — 90 дней задан в `001`/`004` (`TTL toDate(ts) + INTERVAL 90 DAY`).
