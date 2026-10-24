@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Средняя цена одной сцены по новелам в токенах: ось X — номер новеллы, ось Y — средняя цена сцены. Сцена — scene_order > 0; цена сцены — prompt_tokens + completion_tokens по всем вызовам сцены.",
+  "description": "Средняя цена сцены по новелам в токенах, количество сцен по законченным новелам, среднее время на сцену, полная цена законченной новеллы, попадание в кэш и длина законченной новеллы в минутах.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -51,7 +51,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
-      "description": "Линейный график: ось X — номер новеллы (от первой к последней), ось Y — средняя цена одной сцены в токенах. Цена сцены = сумма prompt_tokens + completion_tokens по всем вызовам этой сцены, затем среднее по сценам новеллы. Новеллы без сцен (только настройка/roadmap) не показаны.",
+      "description": "Линейный график: ось X — номер новеллы (от первой к последней), ось Y — средняя цена одной сцены в токенах. Цена сцены = сумма prompt_tokens + completion_tokens по всем вызовам этой сцены, затем среднее по сценам новеллы. Значения не округляются до целых. Новеллы без сцен не показаны.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -82,6 +82,442 @@
               "type": "linear"
             },
             "showPoints": "always",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "novel"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "bottom"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_tokens_per_scene"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Средняя цена сцены, токенов"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Токенов на сцену"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "novel"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    toUInt32OrZero(entity_id) AS novel,\n    avg(scene_tokens) AS avg_tokens_per_scene\nFROM (\n    SELECT\n        entity_id,\n        scene_order,\n        sum(prompt_tokens + completion_tokens) AS scene_tokens\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n)\nGROUP BY entity_id\nORDER BY novel",
+          "refId": "A"
+        }
+      ],
+      "title": "Средняя цена сцены по новелам, токенов",
+      "type": "trend",
+      "pluginVersion": "12.2.0"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Линейный график только по законченным новеллам: ось X — номер новеллы, ось Y — количество сцен. Новелла считается законченной, когда сгенерировано не меньше сцен, чем запланировано в последнем roadmap (сумма scenes_count).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#5794F2"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "Сцен в новелле",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "novel"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "bottom"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "scenes"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Сцен в новелле"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Сцен в новелле"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "novel"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH roads AS (\n    SELECT\n        entity_id,\n        JSONExtractArrayRaw(response, 'roadmap') AS arr\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'RoadmapGenerator'\n        AND $__timeFilter(ts)\n    ORDER BY ts DESC\n    LIMIT 1 BY entity_id\n),\nplanned AS (\n    SELECT\n        entity_id,\n        arraySum(arrayMap(x -> JSONExtractInt(x, 'scenes_count'), arr)) AS planned_scenes\n    FROM roads\n),\nscenes AS (\n    SELECT\n        entity_id,\n        max(scene_order) AS scenes\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n)\nSELECT\n    toUInt32OrZero(s.entity_id) AS novel,\n    s.scenes\nFROM scenes AS s\nINNER JOIN planned AS p ON s.entity_id = p.entity_id\nWHERE s.scenes >= p.planned_scenes\nORDER BY novel",
+          "refId": "A"
+        }
+      ],
+      "title": "Количество сцен по законченным новелам",
+      "type": "trend",
+      "pluginVersion": "12.2.0"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Средняя длительность одной сцены: сумма duration_ms по всем вызовам сцены, затем среднее по сценам новеллы. Ось X — номер новеллы, ось Y — секунд на сцену.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FF9830"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "Секунд на сцену",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "novel"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "bottom"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "seconds_per_scene"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Секунд на сцену"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Секунд на сцену"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "novel"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    toUInt32OrZero(entity_id) AS novel,\n    round(avg(scene_ms) / 1000, 1) AS seconds_per_scene\nFROM (\n    SELECT\n        entity_id,\n        scene_order,\n        sum(duration_ms) AS scene_ms\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n)\nGROUP BY entity_id\nORDER BY novel",
+          "refId": "A"
+        }
+      ],
+      "title": "Среднее время на сцену, секунд",
+      "type": "trend"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Суммарный расход токенов на законченную новеллу: prompt_tokens + completion_tokens по всем LLM-вызовам новеллы. Законченная — новелла, где сгенерировано не меньше сцен, чем запланировано в последнем roadmap.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#B877D9"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "Токенов на новеллу",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -132,16 +568,16 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "avg_tokens_per_scene"
+              "options": "tokens"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "Средняя цена сцены, токенов"
+                "value": "Токенов на новеллу"
               },
               {
                 "id": "custom.axisLabel",
-                "value": "Токенов на сцену"
+                "value": "Токенов на новеллу"
               },
               {
                 "id": "custom.axisPlacement",
@@ -152,12 +588,12 @@
         ]
       },
       "gridPos": {
-        "h": 18,
-        "w": 20,
-        "x": 2,
-        "y": 0
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
       },
-      "id": 5,
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [],
@@ -172,6 +608,7 @@
         },
         "xField": "novel"
       },
+      "pluginVersion": "12.2.0",
       "targets": [
         {
           "datasource": {
@@ -181,11 +618,317 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    toUInt32OrZero(entity_id) AS novel,\n    round(avg(scene_tokens)) AS avg_tokens_per_scene\nFROM (\n    SELECT\n        entity_id,\n        scene_order,\n        sum(prompt_tokens + completion_tokens) AS scene_tokens\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n)\nGROUP BY entity_id\nORDER BY novel",
+          "rawSql": "WITH roads AS (\n    SELECT\n        entity_id,\n        JSONExtractArrayRaw(response, 'roadmap') AS arr\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'RoadmapGenerator'\n        AND $__timeFilter(ts)\n    ORDER BY ts DESC\n    LIMIT 1 BY entity_id\n),\nplanned AS (\n    SELECT\n        entity_id,\n        arraySum(arrayMap(x -> JSONExtractInt(x, 'scenes_count'), arr)) AS planned_scenes\n    FROM roads\n),\nscenes AS (\n    SELECT\n        entity_id,\n        max(scene_order) AS scenes\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n),\nfinished AS (\n    SELECT s.entity_id\n    FROM scenes AS s\n    INNER JOIN planned AS p ON s.entity_id = p.entity_id\n    WHERE s.scenes >= p.planned_scenes\n)\nSELECT\n    toUInt32OrZero(c.entity_id) AS novel,\n    sum(c.prompt_tokens + c.completion_tokens) AS tokens\nFROM analytics.llm_calls AS c FINAL\nINNER JOIN finished AS f ON c.entity_id = f.entity_id\nWHERE c.entity_id != ''\n    AND $__timeFilter(c.ts)\nGROUP BY c.entity_id\nORDER BY novel",
           "refId": "A"
         }
       ],
-      "title": "Средняя цена сцены по новелам, токенов",
+      "title": "Цена законченной новеллы в токенах",
+      "type": "trend"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Доля cached_tokens от prompt_tokens по всем LLM-вызовам новеллы, в процентах.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FADE2A"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "Попадание в кэш, %",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "novel"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "bottom"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cache_hit_pct"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Попадание в кэш, %"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Попадание в кэш, %"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "novel"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    toUInt32OrZero(entity_id) AS novel,\n    round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 1) AS cache_hit_pct\nFROM analytics.llm_calls FINAL\nWHERE entity_id != ''\n    AND $__timeFilter(ts)\nGROUP BY entity_id\nORDER BY novel",
+          "refId": "A"
+        }
+      ],
+      "title": "Попадание в кэш по новелам",
+      "type": "trend"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Оценка времени прочтения только законченных новелл: количество слов в тексте (описания сцен + реплики диалогов) делится на среднюю скорость чтения 200 слов/мин. Законченная — новелла, где сгенерировано не меньше сцен, чем запланировано в последнем roadmap.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FF6B9D"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "Минут на прочтение",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "novel"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "bottom"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "minutes"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Минут на прочтение"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Минут на прочтение"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "novel"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH roads AS (\n    SELECT\n        entity_id,\n        JSONExtractArrayRaw(response, 'roadmap') AS arr\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'RoadmapGenerator'\n        AND $__timeFilter(ts)\n    ORDER BY ts DESC\n    LIMIT 1 BY entity_id\n),\nplanned AS (\n    SELECT\n        entity_id,\n        arraySum(arrayMap(x -> JSONExtractInt(x, 'scenes_count'), arr)) AS planned_scenes\n    FROM roads\n),\nactual_scenes AS (\n    SELECT\n        entity_id,\n        max(scene_order) AS scenes\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n),\nfinished AS (\n    SELECT a.entity_id\n    FROM actual_scenes AS a\n    INNER JOIN planned AS p ON a.entity_id = p.entity_id\n    WHERE a.scenes >= p.planned_scenes\n),\nscene_text AS (\n    SELECT\n        entity_id,\n        scene_order,\n        argMax(\n            concat(\n                JSONExtractString(response, 'title'),\n                ' ',\n                JSONExtractString(response, 'description')\n            ),\n            ts\n        ) AS text\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'SceneGenerator'\n        AND scene_order > 0\n        AND response != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n),\ndialogue_text AS (\n    SELECT\n        entity_id,\n        scene_order,\n        argMax(\n            arrayStringConcat(\n                arrayMap(\n                    x -> JSONExtractString(x, 'text'),\n                    JSONExtractArrayRaw(response, 'dialogue_lines')\n                ),\n                ' '\n            ),\n            ts\n        ) AS text\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'DialogueGenerator'\n        AND scene_order > 0\n        AND response != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n),\nall_text AS (\n    SELECT entity_id, scene_order, text FROM scene_text\n    UNION ALL\n    SELECT entity_id, scene_order, text FROM dialogue_text\n)\nSELECT\n    toUInt32OrZero(entity_id) AS novel,\n    round(sum(length(splitByNonAlpha(text))) / 200, 1) AS minutes\nFROM all_text\nWHERE entity_id IN (SELECT entity_id FROM finished)\nGROUP BY entity_id\nORDER BY novel",
+          "refId": "A"
+        }
+      ],
+      "title": "Длина законченной новеллы в минутах",
       "type": "trend"
     }
   ],
@@ -206,7 +949,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "LLM Scenes / Средняя цена сцены по новелам",
+  "title": "LLM Scenes",
   "uid": "llm-scene-cost",
   "version": 1
 }

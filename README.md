@@ -12,6 +12,7 @@ ClickHouse их накапливает, Grafana показывает дашбо�
 - `clickhouse/init/003_reasoning_and_scores.sql` — guard-колонка `reasoning_tokens`
   и удаление выпиленного скоринга сюжета (`novel_scores`).
 - `clickhouse/init/004_schema_v2.sql` — одноразовая миграция на v2 (см. ниже).
+- `clickhouse/init/005_prompts.sql` — колонка `messages` (полный промпт) + пересоздание MV.
 - `grafana/dashboards/*.json` — дашборды (провижнятся из файлов автоматически).
 - `scripts/report.py` — репортёр итогов/ответов (`make report`).
 - `scripts/verify.py` — health-check полноты доставки (`make verify`).
@@ -26,6 +27,8 @@ ClickHouse их накапливает, Grafana показывает дашбо�
   - `event_id` — уникальный id вызова (дедуп);
   - `scene_order` — `0` для `create_novel`/настройки, `N` для сцены `scene_N`;
   - `response` — текст ответа LLM (roadmap/сцена/диалог), `''` для обычных вызовов.
+  - `messages` — полный промпт (массив сообщений system/user/assistant) в виде
+    JSON-строки, `''` если промпт не передан (добавлено в `005`).
 - `TTL toDate(ts) + INTERVAL 90 DAY` — данные живут 90 дней (настраивается в `001`/`004`).
 - Очередь Kafka читает с `input_format_skip_unknown_fields = 1` — старые события
   без новых полей не ломают парсинг.
@@ -69,7 +72,8 @@ make ch-migrate
    (движок нельзя поменять через `ALTER`), **только если таблица ещё на старом движке**;
    повторные запуски этот шаг пропускают;
 2. применяет `002` (цены/курсы/представление стоимости);
-3. применяет `003` (guard-колонка `reasoning_tokens` + удаление скоринга).
+3. применяет `003` (guard-колонка `reasoning_tokens` + удаление скоринга);
+4. применяет `005` (колонка `messages` для полного промпта + пересоздание MV).
 
 > Пересоздание `llm_calls` дропает текущие данные намеренно: источник истины —
 > `llm_logs/*.jsonl` (он полнее), история перезаливается разовым импортом
@@ -81,12 +85,36 @@ make ch-migrate
 ## Репортёр
 
 ```bash
-make report                        # итоги: токены/стоимость/ошибки по всем новеллам
-make report ARGS="12"              # все запросы + токены + стоимость по новелле
-make report ARGS="12 --responses"  # ответы LLM (roadmap/сцены/диалоги) → llm_responses_12.md
+make report                        # итоги: токены/кэш/стоимость/ошибки по всем новеллам
+make report ARGS="12"              # все запросы + токены + кэш + стоимость по новелле
+make report ARGS="12 --responses"  # ответы LLM (roadmap/сцены/диалоги) → logs/responses/llm_responses_12.md
+make report ARGS="12 --prompts"    # полные промпты + ответы → logs/prompts/llm_prompts_12.md
 ```
 
-Прямой вызов: `python3 scripts/report.py [<novel_id>] [--responses]`.
+Прямой вызов: `python3 scripts/report.py [<novel_id>] [--responses|--prompts]`.
+
+Отчёты-файлы складываются в папку `logs/`, разложенные по подпапкам:
+
+```
+logs/
+├── prompts/       # --prompts   → llm_prompts_<novel_id>.md
+└── responses/     # --responses → llm_responses_<novel_id>.md
+```
+
+Папки создаются автоматически, если их нет.
+
+Колонки кэша (обе таблицы, источник — `prompt_tokens`/`cached_tokens` в `llm_calls`):
+
+- `cached` — токены, попавшие в кэш (cache hit);
+- `hit%` — попадание в кэш: `cached / prompt * 100`;
+- `miss` — cache miss в токенах: `prompt − cached`;
+- `save_rub` (только в итогах) — экономия кэша из `cache_savings_rub`.
+
+В итогах вызовы с `entity_id = ''` сводятся в строку «—» и входят в ИТОГО
+(поэтому `calls` в отчёте совпадает с числом строк в `llm_calls`).
+
+В «фуле» по новелле (`report.py <novel_id>`) показывается размер промпта
+(`length(messages)` в колонке `msg`) — для промптов, переданных в `messages`.
 
 ## Health-check полноты
 

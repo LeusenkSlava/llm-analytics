@@ -221,4 +221,5 @@ __marimo__/
 docs/
 
 # llm-analytics: сгенерированные отчёты репортёра (make report ARGS="<id> --responses")
-llm_responses_*.md
+# logs/prompts/<file>.md и logs/responses/<file>.md
+logs/

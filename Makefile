@@ -45,7 +45,7 @@ stop:
 # -----------------------------
 # Применить миграции схемы к уже существующей базе (идемпотентно).
 # 004 пересоздаёт llm_calls (движок → ReplacingMergeTree) — выполняется один раз,
-# только если llm_calls ещё на старом движке. 002/003 безопасно гонять повторно.
+# только если llm_calls ещё на старом движке. 002/003/005 безопасно гонять повторно.
 ch-migrate:
 	@engine="$$($(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --query "SELECT engine FROM system.tables WHERE database = '\''analytics'\'' AND name = '\''llm_calls'\''"')"; \
 	if [ "$$engine" != "ReplacingMergeTree" ]; then \
@@ -56,6 +56,7 @@ ch-migrate:
 	fi
 	$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --multiquery' < clickhouse/init/002_cost_peak_offpeak.sql
 	$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --multiquery' < clickhouse/init/003_reasoning_and_scores.sql
+	$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --multiquery' < clickhouse/init/005_prompts.sql
 
 # Обновить курсы валют: make rates USD_CNY=7.1 USD_RUB=85.4
 # (значение = сколько единиц валюты за 1 USD; для CNY удобно оставить 6.67,
