@@ -417,6 +417,10 @@
               {
                 "id": "decimals",
                 "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "short"
               }
             ]
           },
@@ -930,6 +934,161 @@
       ],
       "title": "Длина законченной новеллы в минутах",
       "type": "trend"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Повторные LLM-вызовы по новеллам в разбивке по этапам сцены. Считается как «вызовов сверх первого на сцену»: count(step) − 1 по каждой паре (новелла, сцена), затем сумма по новелле.\n- Сцена (SceneGenerator) — пересоздание сцены: ретраи валидации по роадмапу (до 3 на сцену).\n- Валидация (SceneRoadmapValidator) — повторные проверки, сопровождающие каждый ретрай сцены.\n- Диалог (DialogueGenerator) — повторные генерации диалога (полные пересборки новеллы).\n- Контекст (StoryContextGenerator) — исторически 3 вызова на сцену (генерация + проверка дублей + проверка противоречий); в текущем коде 1 вызов, поэтому в свежих данных ≈ 0.\nДанные до 12 октября не содержат SceneRoadmapValidator (валидатор появился позже): там повторы — это полные пересборки сцены (дублируются SceneGenerator, DialogueGenerator, контекст).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Повторных вызовов",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "novel"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Номер новеллы"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "scene_retries"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Сцена (SceneGenerator)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "validator_extra"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Валидация (SceneRoadmapValidator)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dialogue_extra"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Диалог (DialogueGenerator)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "context_extra"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Контекст (StoryContextGenerator)"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 11,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "normal",
+        "tooltip": {
+          "hideZeros": true,
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT\n    toString(toUInt32OrZero(entity_id)) AS novel,\n    sumIf(calls - 1, step = 'SceneGenerator') AS scene_retries,\n    sumIf(calls - 1, step = 'SceneRoadmapValidator') AS validator_extra,\n    sumIf(calls - 1, step = 'DialogueGenerator') AS dialogue_extra,\n    sumIf(calls - 1, step = 'StoryContextGenerator') AS context_extra\nFROM (\n    SELECT\n        entity_id,\n        scene_order,\n        step,\n        count() AS calls\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order, step\n)\nGROUP BY entity_id\nHAVING scene_retries + validator_extra + dialogue_extra + context_extra > 0\nORDER BY toUInt32OrZero(entity_id)",
+          "refId": "A"
+        }
+      ],
+      "title": "Повторные LLM-вызовы по этапам (пересоздания)",
+      "type": "barchart",
+      "pluginVersion": "12.2.0"
     }
   ],
   "preload": false,
@@ -951,5 +1110,5 @@
   "timezone": "",
   "title": "LLM Scenes",
   "uid": "llm-scene-cost",
-  "version": 1
+  "version": 5
 }
