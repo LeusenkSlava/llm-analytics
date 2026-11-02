@@ -44,8 +44,11 @@ ClickHouse их накапливает, Grafana показывает дашбо�
 | LLM Scenes / Средняя цена сцены по новелам | `llm-scene-cost` | Цена одной сцены в токенах по всем новеллам: среднее/медиана, детали по сценам |
 | LLM Trends | `llm-trends` | Средние по времени |
 
-Число сцен новеллы считается как `max(scene_order)` (настройка `create_novel`
-не смешивается со сценами — у неё `scene_order = 0`).
+Число сцен новеллы считается как число уникальных `operation` со `scene_order > 0`
+(`uniqExact(operation)`), а не как `max(scene_order)`. Причина: у сцен догенерации
+`operation` имеет вид `scene_<roadmap_id>_<позиция>`, а `scene_order` — склейка этих
+двух чисел (`scene_698_1` → `6981`), поэтому `max(scene_order)` давал «тысячи сцен»
+на новеллу. Настройка `create_novel` не смешивается со сценами — у неё `scene_order = 0`.
 
 На дашборде `llm-scene-cost` цена сцены — это `prompt_tokens + completion_tokens`
 по всем вызовам сцены (`scene_order > 0`), усреднённая по сценам новеллы.
@@ -91,7 +94,23 @@ make report ARGS="12 --responses"  # ответы LLM (roadmap/сцены/диа
 make report ARGS="12 --prompts"    # полные промпты + ответы → logs/prompts/llm_prompts_12.md
 ```
 
-Прямой вызов: `python3 scripts/report.py [<novel_id>] [--responses|--prompts]`.
+Фильтр `--step <name>` (только с `--responses`/`--prompts`) оставляет записи
+только нужного шага генерации, например только диалоги:
+
+```bash
+make report ARGS="12 --responses --step DialogueGenerator"
+# → logs/responses/llm_responses_12_dialoguegenerator.md
+```
+
+Совпадение регистронезависимое. Полный список шагов можно посмотреть так:
+
+```bash
+docker compose exec clickhouse clickhouse-client \
+  --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
+  --query "SELECT DISTINCT step FROM analytics.llm_calls ORDER BY step"
+```
+
+Прямой вызов: `python3 scripts/report.py [<novel_id>] [--responses|--prompts] [--step <name>]`.
 
 Отчёты-файлы складываются в папку `logs/`, разложенные по подпапкам:
 
@@ -170,7 +189,10 @@ DeepSeek (модель `deepseek-flash` / DeepSeek-V4.1-Flash) тарифици�
 
 - **Сцена** — колонка `scene_order` (`0` = настройка, `N` = сцена N). Первая сцена
   больше не прячется в `create_novel`: генераторы пишут `scene_1` и `scene_order = 1`.
-  Число сцен новеллы = `max(scene_order)`.
+- **Число сцен новеллы** = `uniqExact(operation)` со `scene_order > 0`, **не**
+  `max(scene_order)`: у сцен догенерации `operation` = `scene_<roadmap_id>_<позиция>`,
+  а `scene_order` — склейка (`scene_698_1` → `6981`), из-за чего `max()` давал
+  значения в тысячах вместо реальных ~20 сцен.
 - **`reasoning_tokens`** — колонка в `llm_calls` (проброшена из `llm_log`). Доля
   reasoning в output считается как `reasoning_tokens / completion_tokens`.
 

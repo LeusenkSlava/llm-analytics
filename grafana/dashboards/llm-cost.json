@@ -985,7 +985,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT entity_id, max(scene_order) AS scenes, round(sum(c.cost_${currency}), 6) AS cost, sum(prompt_tokens + completion_tokens) AS tokens, count() AS calls FROM analytics.llm_calls_cost c WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY entity_id ORDER BY cost DESC",
+          "rawSql": "SELECT entity_id, uniqExactIf(operation, scene_order > 0) AS scenes, round(sum(c.cost_${currency}), 6) AS cost, sum(prompt_tokens + completion_tokens) AS tokens, count() AS calls FROM analytics.llm_calls_cost c WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY entity_id ORDER BY cost DESC",
           "refId": "A"
         }
       ],
@@ -1076,7 +1076,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT scenes, count() AS novels FROM (SELECT entity_id, max(scene_order) AS scenes FROM analytics.llm_calls FINAL WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY entity_id) GROUP BY scenes ORDER BY scenes",
+          "rawSql": "SELECT scenes, count() AS novels FROM (SELECT entity_id, uniqExactIf(operation, scene_order > 0) AS scenes FROM analytics.llm_calls FINAL WHERE entity_id != '' AND $__timeFilter(ts) GROUP BY entity_id) GROUP BY scenes ORDER BY scenes",
           "refId": "A"
         }
       ],

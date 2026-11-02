@@ -68,6 +68,7 @@ rates:
 	@echo "rates updated: CNY=$(USD_CNY), RUB=$(USD_RUB) per USD"
 
 # Репортёр: итоги по всем новеллам / по одной новелле / ответы LLM.
+# Фильтр по шагу: make report ARGS="12 --responses --step DialogueGenerator"
 # Требует запущенный стек ClickHouse.
 report:
 	python3 scripts/report.py $(ARGS)

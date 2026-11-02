@@ -9,15 +9,24 @@
     report.py <novel_id> --responses # roadmap/сцены/диалоги (JSON → .md)
     report.py <novel_id> --prompts   # полные промпты (messages) + ответы → .md
 
+Флаг `--step <name>` (только с `--responses`/`--prompts`) оставляет записи только
+указанного шага генерации (регистронезависимо), например:
+
+    report.py 12 --responses --step DialogueGenerator  # только диалоги
+    report.py 12 --prompts --step SceneGenerator        # только промпты/ответы сцен
+
 Файлы-отчёты складываются в logs/:
     logs/prompts/llm_prompts_<novel_id>.md       (режим --prompts)
     logs/responses/llm_responses_<novel_id>.md   (режим --responses)
+При фильтре `--step` к имени файла добавляется суффикс `_<step>`, чтобы не
+затереть полный отчёт.
 Папки создаются автоматически.
 
 Запуск:
     make report                      # режим «итоги»
     make report ARGS="12"            # по одной новелле
     make report ARGS="12 --responses"
+    make report ARGS="12 --responses --step DialogueGenerator"
     make report ARGS="12 --prompts"
     python3 scripts/report.py 12 --prompts   # напрямую
 
@@ -81,6 +90,11 @@ def _num(v, nd: int = 0) -> str:
         return str(v)
 
 
+def _sql_str(v: str) -> str:
+    """Экранирует строку для подстановки в SQL-литерал ClickHouse."""
+    return v.replace("\\", "\\\\").replace("'", "\\'")
+
+
 # ---------------------------------------------------------------------------
 # Режим 1: итоги по всем новеллам
 # ---------------------------------------------------------------------------
@@ -101,7 +115,9 @@ def summary() -> None:
             round(sum(cost_usd), 6) AS cost_usd,
             round(sum(cost_rub), 4) AS cost_rub,
             round(sum(cache_savings_rub), 4) AS cache_savings_rub,
-            max(scene_order) AS scenes
+            -- число уникальных сцен, не max(scene_order): у сцен догенерации
+            -- scene_order — склейка roadmap_id и позиции (scene_698_1 → 6981)
+            uniqExactIf(operation, scene_order > 0) AS scenes
         FROM analytics.llm_calls_cost
         GROUP BY entity_id
         ORDER BY entity_id = '', toUInt64OrZero(entity_id)
@@ -254,7 +270,10 @@ def _write_report(out_dir: Path, filename: str, lines: list[str], label: str) ->
     print(f"{label} записаны в {out_path}")
 
 
-def responses(novel_id: str) -> None:
+def responses(novel_id: str, step: str | None = None) -> None:
+    step_filter = (
+        f" AND lowerUTF8(step) = lowerUTF8('{_sql_str(step)}')" if step else ""
+    )
     rows = ch_query_rows(
         f"""
         SELECT
@@ -264,17 +283,19 @@ def responses(novel_id: str) -> None:
             step,
             response
         FROM analytics.llm_calls FINAL
-        WHERE entity_id = '{novel_id}' AND response != ''
+        WHERE entity_id = '{novel_id}' AND response != ''{step_filter}
         ORDER BY scene_order, ts
         FORMAT JSONEachRow
         """
     )
     if not rows:
-        print(f"Нет ответов (response != '') для новеллы {novel_id}.")
+        suffix = f" (step={step})" if step else ""
+        print(f"Нет ответов (response != '') для новеллы {novel_id}{suffix}.")
         return
 
+    title_suffix = f" · step: {step}" if step else ""
     lines: list[str] = [
-        f"# Ответы LLM — новелла {novel_id}",
+        f"# Ответы LLM — новелла {novel_id}{title_suffix}",
         "",
         f"Всего записей с ответом: {len(rows)}",
         "",
@@ -290,13 +311,19 @@ def responses(novel_id: str) -> None:
             "",
         ]
 
-    _write_report(RESPONSES_DIR, f"llm_responses_{novel_id}.md", lines, "Ответы")
+    filename = f"llm_responses_{novel_id}.md"
+    if step:
+        filename = f"llm_responses_{novel_id}_{step.lower()}.md"
+    _write_report(RESPONSES_DIR, filename, lines, "Ответы")
 
 
 # ---------------------------------------------------------------------------
 # Режим 4: полные промпты (messages) + ответы → .md
 # ---------------------------------------------------------------------------
-def prompts(novel_id: str) -> None:
+def prompts(novel_id: str, step: str | None = None) -> None:
+    step_filter = (
+        f" AND lowerUTF8(step) = lowerUTF8('{_sql_str(step)}')" if step else ""
+    )
     rows = ch_query_rows(
         f"""
         SELECT
@@ -307,17 +334,19 @@ def prompts(novel_id: str) -> None:
             messages,
             response
         FROM analytics.llm_calls FINAL
-        WHERE entity_id = '{novel_id}' AND messages != ''
+        WHERE entity_id = '{novel_id}' AND messages != ''{step_filter}
         ORDER BY scene_order, ts
         FORMAT JSONEachRow
         """
     )
     if not rows:
-        print(f"Нет промптов (messages != '') для новеллы {novel_id}.")
+        suffix = f" (step={step})" if step else ""
+        print(f"Нет промптов (messages != '') для новеллы {novel_id}{suffix}.")
         return
 
+    title_suffix = f" · step: {step}" if step else ""
     lines: list[str] = [
-        f"# Промпты и ответы LLM — новелла {novel_id}",
+        f"# Промпты и ответы LLM — новелла {novel_id}{title_suffix}",
         "",
         f"Всего записей с промптом: {len(rows)}",
         "",
@@ -339,7 +368,10 @@ def prompts(novel_id: str) -> None:
             "",
         ]
 
-    _write_report(PROMPTS_DIR, f"llm_prompts_{novel_id}.md", lines, "Промпты и ответы")
+    filename = f"llm_prompts_{novel_id}.md"
+    if step:
+        filename = f"llm_prompts_{novel_id}_{step.lower()}.md"
+    _write_report(PROMPTS_DIR, filename, lines, "Промпты и ответы")
 
 
 def main() -> int:
@@ -349,20 +381,28 @@ def main() -> int:
                         help="вывести ответы LLM (roadmap/сцены/диалоги) в .md")
     parser.add_argument("--prompts", action="store_true",
                         help="вывести полные промпты (messages) + ответы в .md")
+    parser.add_argument("--step", default=None,
+                        help="фильтр по шагу генерации (только с --responses/--prompts), "
+                             "напр. DialogueGenerator")
     args = parser.parse_args()
+
+    if args.step and not (args.responses or args.prompts):
+        print("--step работает только вместе с --responses или --prompts:", file=sys.stderr)
+        print("  report.py <novel_id> --responses --step DialogueGenerator", file=sys.stderr)
+        return 2
 
     if args.responses:
         if not args.novel_id:
             print("Для --responses нужен <novel_id>:", file=sys.stderr)
             print("  report.py <novel_id> --responses", file=sys.stderr)
             return 2
-        responses(args.novel_id)
+        responses(args.novel_id, args.step)
     elif args.prompts:
         if not args.novel_id:
             print("Для --prompts нужен <novel_id>:", file=sys.stderr)
             print("  report.py <novel_id> --prompts", file=sys.stderr)
             return 2
-        prompts(args.novel_id)
+        prompts(args.novel_id, args.step)
     elif args.novel_id:
         novel_full(args.novel_id)
     else:
