@@ -57,6 +57,23 @@ ch-migrate:
 	$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --multiquery' < clickhouse/init/002_cost_peak_offpeak.sql
 	$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --multiquery' < clickhouse/init/003_reasoning_and_scores.sql
 	$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --multiquery' < clickhouse/init/005_prompts.sql
+	$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --multiquery' < clickhouse/init/006_novel_variants.sql
+	@echo "→ prompt_variant: make sync-variants (справочник из Postgres генератора)"
+
+# Синхронизация вариантов промптов из Postgres генератора в ClickHouse.
+# В событиях llm.usage prompt_variant нет, поэтому справочник
+# analytics.novel_prompt_variants наполняется из novels.prompt_variant.
+# Запускать после появления новых новелл (дашборд считает их как `unknown`).
+# Переопределяемо: PG_CONTAINER=... PG_DB=... PG_USER=... make sync-variants
+PG_CONTAINER ?= ai_plot_generator-db_pg-1
+PG_DB ?= clean-example
+PG_USER ?= postgres
+sync-variants:
+	@docker exec $(PG_CONTAINER) psql -U $(PG_USER) -d $(PG_DB) -At -F $$'\t' \
+		-c "SELECT id, prompt_variant FROM novels WHERE prompt_variant != '' ORDER BY id" | \
+		$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --query "INSERT INTO analytics.novel_prompt_variants (novel_id, prompt_variant) FORMAT TSV"'
+	@$(DOCKER_COMPOSE) exec -T clickhouse sh -c 'clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD" --query "OPTIMIZE TABLE analytics.novel_prompt_variants FINAL"'
+	@echo "prompt_variant synced → analytics.novel_prompt_variants"
 
 # Обновить курсы валют: make rates USD_CNY=7.1 USD_RUB=85.4
 # (значение = сколько единиц валюты за 1 USD; для CNY удобно оставить 6.67,

@@ -1,0 +1,1471 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Куда движется стоимость новеллы. Стоимость новеллы, сцены и 1000 токенов по когортам даты старта новеллы, со скользящим сглаживанием вместо ям и пиков. Новеллы разной длины сравниваются через стоимость сцены и стоимость 1000 токенов. Всё можно смотреть по всем вариантам промптов сразу и отдельно по каждому (prompt_variant).\n\nДата новеллы — дата её первого LLM-вызова; стоимость новеллы — все её вызовы за всё время. Поэтому новеллы, начатые в периоде, учитываются целиком, а последние дни могут быть занижены (генерация ещё идёт).\n\nprompt_variant не приходит в событиях llm.usage: справочник analytics.novel_prompt_variants наполняется из Postgres генератора командой `make sync-variants`, без записи в справочнике новелла показывается как unknown.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Средняя стоимость одной новеллы за период: все LLM-вызовы новеллы (создание, настройка, все сцены и догенерации) / число новелл. Сглаживание здесь не применяется — это фактическое среднее за период.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n)\nSELECT round(avg(cost), 4) AS value\nFROM per_novel\nWHERE $__timeFilter(started)\n    AND variant IN (${prompt_variant:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Стоимость новеллы, ${currency:text}",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Стоимость одной сцены: все затраты новелл / число их сцен. Общий знаменатель для новелл разной длины — так их можно сравнивать.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n)\nSELECT round(\n    sumIf(cost, scenes > 0) / greatest(sumIf(scenes, scenes > 0), 1),\n    5\n) AS value\nFROM per_novel\nWHERE $__timeFilter(started)\n    AND variant IN (${prompt_variant:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Стоимость сцены, ${currency:text}",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Средняя цена 1000 токенов (prompt + completion). Не зависит от длины новеллы: показывает, дорожает ли сама генерация.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n)\nSELECT round(sum(cost) / greatest(sum(tokens), 1) * 1000, 5) AS value\nFROM per_novel\nWHERE $__timeFilter(started)\n    AND variant IN (${prompt_variant:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Цена 1000 токенов, ${currency:text}",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Сколько новелл начато в выбранном периоде (по дате первого вызова).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n)\nSELECT count() AS value\nFROM per_novel\nWHERE $__timeFilter(started)\n    AND variant IN (${prompt_variant:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Новелл в периоде",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Суммарное число сцен у новелл, начатых в выбранном периоде.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n)\nSELECT sum(scenes) AS value\nFROM per_novel\nWHERE $__timeFilter(started)\n    AND variant IN (${prompt_variant:sqlstring})",
+          "refId": "A"
+        }
+      ],
+      "title": "Сцен в периоде",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "На сколько процентов изменилась сглаженная стоимость новеллы между началом и концом выбранного периода. Красный — стоимость растёт, зелёный — падает.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percent",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\ncohorts AS (\n    SELECT\n        started AS time,\n        sum(cost) AS cost,\n        sum(cost_input) AS cost_input,\n        sum(cost_cached) AS cost_cached,\n        sum(cost_output) AS cost_output,\n        sum(tokens) AS tokens,\n        sum(scenes) AS scenes_total,\n        count() AS novels\n    FROM per_novel\n    WHERE variant IN (${prompt_variant:sqlstring})\n    GROUP BY started\n),\nwindowed AS (\n    SELECT\n        time,\n        sum(cost) OVER w / greatest(sum(novels) OVER w, 1) AS value\n    FROM cohorts\n    WHERE $__timeFilter(time)\n    WINDOW w AS (ORDER BY time ROWS BETWEEN ${smoothing} PRECEDING AND ${smoothing} FOLLOWING)\n)\nSELECT round(\n    (argMax(value, time) - argMin(value, time))\n    / greatest(argMin(value, time), 1e-9) * 100,\n    1\n) AS value\nFROM windowed",
+          "refId": "A"
+        }
+      ],
+      "title": "Δ стоимости новеллы",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 100,
+      "panels": [],
+      "title": "Тренд стоимости",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Средняя стоимость одной новеллы по дате её старта. Считается как суммарная стоимость всех новелл в скользящем окне / число новелл в окне (±N дней, переменная «Сглаживание»). Дни с одной новеллой не дают пиков и ям. Последние дни могут быть занижены: новеллы ещё генерируются.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\ncohorts AS (\n    SELECT\n        started AS time,\n        sum(cost) AS cost,\n        sum(cost_input) AS cost_input,\n        sum(cost_cached) AS cost_cached,\n        sum(cost_output) AS cost_output,\n        sum(tokens) AS tokens,\n        sum(scenes) AS scenes_total,\n        count() AS novels\n    FROM per_novel\n    WHERE variant IN (${prompt_variant:sqlstring})\n    GROUP BY started\n)\nSELECT\n    time,\n    round(sum(cost) OVER w / greatest(sum(novels) OVER w, 1), 6) AS \"Стоимость новеллы\"\nFROM cohorts\nWHERE $__timeFilter(time)\nWINDOW w AS (ORDER BY time ROWS BETWEEN ${smoothing} PRECEDING AND ${smoothing} FOLLOWING)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Стоимость новеллы — тренд, ${currency:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Стоимость одной сцены в скользящем окне: все затраты / все сцены новелл окна. Позволяет сравнивать новеллы с разным числом сцен: если растёт стоимость новеллы, но не сцены — новеллы просто стали длиннее.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\ncohorts AS (\n    SELECT\n        started AS time,\n        sum(cost) AS cost,\n        sum(cost_input) AS cost_input,\n        sum(cost_cached) AS cost_cached,\n        sum(cost_output) AS cost_output,\n        sum(tokens) AS tokens,\n        sum(scenes) AS scenes_total,\n        count() AS novels\n    FROM per_novel\n    WHERE variant IN (${prompt_variant:sqlstring})\n    GROUP BY started\n)\nSELECT\n    time,\n    round(\n        sumIf(cost, scenes_total > 0) OVER w\n        / greatest(sumIf(scenes_total, scenes_total > 0) OVER w, 1),\n        6\n    ) AS \"Стоимость сцены\"\nFROM cohorts\nWHERE $__timeFilter(time)\nWINDOW w AS (ORDER BY time ROWS BETWEEN ${smoothing} PRECEDING AND ${smoothing} FOLLOWING)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Стоимость сцены — тренд, ${currency:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "«Прайс» генерации без влияния размера новеллы: стоимость всех вызовов окна / все токены окна × 1000. Растёт, если в промптах больше контекста или появились более дорогие этапы.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 15
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\ncohorts AS (\n    SELECT\n        started AS time,\n        sum(cost) AS cost,\n        sum(cost_input) AS cost_input,\n        sum(cost_cached) AS cost_cached,\n        sum(cost_output) AS cost_output,\n        sum(tokens) AS tokens,\n        sum(scenes) AS scenes_total,\n        count() AS novels\n    FROM per_novel\n    WHERE variant IN (${prompt_variant:sqlstring})\n    GROUP BY started\n)\nSELECT\n    time,\n    round(sum(cost) OVER w / greatest(sum(tokens) OVER w, 1) * 1000, 6) AS \"Цена 1000 токенов\"\nFROM cohorts\nWHERE $__timeFilter(time)\nWINDOW w AS (ORDER BY time ROWS BETWEEN ${smoothing} PRECEDING AND ${smoothing} FOLLOWING)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Цена 1000 токенов — тренд, ${currency:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Среднее число сцен и токенов на новеллу в том же окне. Если стоимость растёт вместе с размером — новеллы становятся длиннее; если размер тот же, а стоимость растёт — дорожает токен.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false,
+            "axisSoftMin": 0
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Сцен на новеллу"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisSoftMin",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Токенов на новеллу"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "custom.axisSoftMin",
+                "value": 0
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 15
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\ncohorts AS (\n    SELECT\n        started AS time,\n        sum(cost) AS cost,\n        sum(cost_input) AS cost_input,\n        sum(cost_cached) AS cost_cached,\n        sum(cost_output) AS cost_output,\n        sum(tokens) AS tokens,\n        sum(scenes) AS scenes_total,\n        count() AS novels\n    FROM per_novel\n    WHERE variant IN (${prompt_variant:sqlstring})\n    GROUP BY started\n)\nSELECT\n    time,\n    round(sum(tokens) OVER w / greatest(sum(novels) OVER w, 1), 0) AS \"Токенов на новеллу\",\n    round(sum(scenes_total) OVER w / greatest(sum(novels) OVER w, 1), 1) AS \"Сцен на новеллу\"\nFROM cohorts\nWHERE $__timeFilter(time)\nWINDOW w AS (ORDER BY time ROWS BETWEEN ${smoothing} PRECEDING AND ${smoothing} FOLLOWING)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Размер новеллы: сцены и токены",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Сколько новелл стартовало в каждый день — размер выборки для тренда. Если в дне 1–2 новеллы, сглаживание особенно важно.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.7,
+            "drawStyle": "bars",
+            "fillOpacity": 45,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false,
+            "axisSoftMin": 0
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 15
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n)\nSELECT\n    started AS time,\n    count() AS \"Новелл\"\nFROM per_novel\nWHERE $__timeFilter(started)\n    AND variant IN (${prompt_variant:sqlstring})\nGROUP BY started\nORDER BY started",
+          "refId": "A"
+        }
+      ],
+      "title": "Новелл по дням",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Средняя стоимость новеллы по компонентам: input (cache miss), cached (cache hit) и output. Output-токены самые дорогие, поэтому рост этой полосы — главный драйвер удорожания новеллы.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 55,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\ncohorts AS (\n    SELECT\n        started AS time,\n        sum(cost) AS cost,\n        sum(cost_input) AS cost_input,\n        sum(cost_cached) AS cost_cached,\n        sum(cost_output) AS cost_output,\n        sum(tokens) AS tokens,\n        sum(scenes) AS scenes_total,\n        count() AS novels\n    FROM per_novel\n    WHERE variant IN (${prompt_variant:sqlstring})\n    GROUP BY started\n)\nSELECT\n    time,\n    round(sum(cost_input) OVER w / greatest(sum(novels) OVER w, 1), 6) AS \"Input (cache miss)\",\n    round(sum(cost_cached) OVER w / greatest(sum(novels) OVER w, 1), 6) AS \"Cached (cache hit)\",\n    round(sum(cost_output) OVER w / greatest(sum(novels) OVER w, 1), 6) AS \"Output\"\nFROM cohorts\nWHERE $__timeFilter(time)\nWINDOW w AS (ORDER BY time ROWS BETWEEN ${smoothing} PRECEDING AND ${smoothing} FOLLOWING)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Из чего складывается стоимость новеллы, ${currency:text}",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "id": 101,
+      "panels": [],
+      "title": "По варианту промптов",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Тот же сглаженный тренд стоимости новеллы, но отдельной линией на каждый prompt_variant. Фильтр «Вариант промптов» сверху оставляет один вариант или все сразу.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 2,
+          "displayName": "${__field.labels.variant}"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\ncohorts AS (\n    SELECT\n        started AS time,\n        variant AS variant,\n        sum(cost) AS cost,\n        sum(scenes) AS scenes_total,\n        count() AS novels\n    FROM per_novel\n    WHERE variant IN (${prompt_variant:sqlstring})\n    GROUP BY started, variant\n)\nSELECT\n    time,\n    variant,\n    round(sum(cost) OVER w / greatest(sum(novels) OVER w, 1), 6) AS \"Стоимость новеллы\"\nFROM cohorts\nWHERE $__timeFilter(time)\nWINDOW w AS (PARTITION BY variant ORDER BY time ROWS BETWEEN ${smoothing} PRECEDING AND ${smoothing} FOLLOWING)\nORDER BY time, variant",
+          "refId": "A"
+        }
+      ],
+      "title": "Стоимость новеллы по prompt_variant, ${currency:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Стоимость сцены по вариантам промптов: сравнение «цена за единицу контента» между default / nsfw_high / nsfw_extra.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisGridShow": true,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "showValues": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "decimals": 3,
+          "displayName": "${__field.labels.variant}"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\ncohorts AS (\n    SELECT\n        started AS time,\n        variant AS variant,\n        sum(cost) AS cost,\n        sum(scenes) AS scenes_total,\n        count() AS novels\n    FROM per_novel\n    WHERE variant IN (${prompt_variant:sqlstring})\n    GROUP BY started, variant\n)\nSELECT\n    time,\n    variant,\n    round(\n        sumIf(cost, scenes_total > 0) OVER w\n        / greatest(sumIf(scenes_total, scenes_total > 0) OVER w, 1),\n        6\n    ) AS \"Стоимость сцены\"\nFROM cohorts\nWHERE $__timeFilter(time)\nWINDOW w AS (PARTITION BY variant ORDER BY time ROWS BETWEEN ${smoothing} PRECEDING AND ${smoothing} FOLLOWING)\nORDER BY time, variant",
+          "refId": "A"
+        }
+      ],
+      "title": "Стоимость сцены по prompt_variant, ${currency:text}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Итоги за период по вариантам промптов: число новелл и сцен, стоимость новеллы (среднее и медиана), цена сцены и 1000 токенов, попадание в кэш и доля в общих затратах. `unknown` — новеллы без записи в справочнике вариантов.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "id": 15,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n),\nby_variant AS (\n    SELECT\n        variant,\n        count() AS novels,\n        sum(scenes) AS scenes_total,\n        sum(cost) AS cost_total,\n        sum(tokens) AS tokens_total,\n        sum(cached_tokens) AS cached_tokens_total,\n        sum(prompt_tokens) AS prompt_tokens_total,\n        avgIf(cost, scenes > 0) AS avg_cost,\n        avgIf(cost / greatest(scenes, 1), scenes > 0) AS avg_cost_per_scene,\n        quantile(0.5)(cost) AS median_cost\n    FROM per_novel\n    WHERE $__timeFilter(started)\n        AND variant IN (${prompt_variant:sqlstring})\n    GROUP BY variant\n)\nSELECT\n    variant AS \"Вариант\",\n    novels AS \"Новелл\",\n    scenes_total AS \"Сцен\",\n    round(avg_cost, 4) AS \"Новелла, ${currency:text}\",\n    round(median_cost, 4) AS \"Медиана, ${currency:text}\",\n    round(avg_cost_per_scene, 5) AS \"Сцена, ${currency:text}\",\n    round(cost_total / greatest(tokens_total, 1) * 1000, 5) AS \"1000 ток., ${currency:text}\",\n    round(cached_tokens_total / greatest(prompt_tokens_total, 1) * 100, 1) AS \"Кэш, %\",\n    round(cost_total / greatest(sum(cost_total) OVER (), 1) * 100, 1) AS \"Доля, %\"\nFROM by_variant\nORDER BY cost_total DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Сводка по prompt_variant",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 49
+      },
+      "id": 102,
+      "panels": [],
+      "title": "Детали",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "description": "Все новеллы, начатые в выбранном периоде: стоимость, число сцен и вызовов, токены, цена сцены и 1000 токенов, попадание в кэш. Сортировка — от новых к старым.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "id": 16,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "WITH\nper_novel AS (\n    SELECT\n        c.entity_id AS entity_id,\n        toStartOfDay(min(c.ts)) AS started,\n        coalesce(nullIf(any(v.prompt_variant), ''), 'unknown') AS variant,\n        sum(c.cost_${currency}) AS cost,\n        sum(c.cost_input_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_input,\n        sum(c.cost_cached_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_cached,\n        sum(c.cost_output_usd * c.cost_${currency} / greatest(c.cost_usd, 1e-12)) AS cost_output,\n        sum(c.prompt_tokens + c.completion_tokens) AS tokens,\n        sum(c.prompt_tokens) AS prompt_tokens,\n        sum(c.cached_tokens) AS cached_tokens,\n        uniqExactIf(c.operation, c.scene_order > 0) AS scenes,\n        count() AS calls\n    FROM analytics.llm_calls_cost AS c\n    LEFT JOIN analytics.novel_prompt_variants_v AS v ON c.entity_id = v.novel_id\n    WHERE c.entity_id != ''\n    GROUP BY c.entity_id\n)\nSELECT\n    entity_id AS \"Новелла\",\n    variant AS \"Вариант\",\n    formatDateTime(started, '%Y-%m-%d') AS \"Старт\",\n    scenes AS \"Сцен\",\n    calls AS \"Вызовов\",\n    tokens AS \"Токенов\",\n    round(cost, 4) AS \"Стоимость, ${currency:text}\",\n    round(cost / greatest(scenes, 1), 5) AS \"Сцена, ${currency:text}\",\n    round(cost / greatest(tokens, 1) * 1000, 5) AS \"1000 токенов, ${currency:text}\",\n    round(cached_tokens / greatest(prompt_tokens, 1) * 100, 1) AS \"Кэш, %\"\nFROM per_novel\nWHERE $__timeFilter(started)\n    AND variant IN (${prompt_variant:sqlstring})\nORDER BY started DESC, cost DESC\nLIMIT 500",
+          "refId": "A"
+        }
+      ],
+      "title": "Новеллы периода",
+      "type": "table"
+    }
+  ],
+  "preload": false,
+  "refresh": "1m",
+  "schemaVersion": 42,
+  "tags": [
+    "llm",
+    "cost",
+    "trends",
+    "prompt-variant"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "RUB",
+          "value": "rub"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Валюта",
+        "multi": false,
+        "name": "currency",
+        "options": [],
+        "query": "RUB : rub,CNY : cny,USD : usd",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "definition": "SELECT variant\nFROM (\n    SELECT prompt_variant AS variant FROM analytics.novel_prompt_variants_v\n    UNION ALL\n    SELECT 'unknown'\n)\nGROUP BY variant\nORDER BY variant",
+        "description": "Вариант промптов новеллы. Список берётся из справочника analytics.novel_prompt_variants (в событиях llm.usage prompt_variant нет). Новеллы без записи в справочнике показаны как unknown — запустите make sync-variants.",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Вариант промптов",
+        "multi": true,
+        "name": "prompt_variant",
+        "options": [],
+        "query": {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
+          "rawSql": "SELECT variant\nFROM (\n    SELECT prompt_variant AS variant FROM analytics.novel_prompt_variants_v\n    UNION ALL\n    SELECT 'unknown'\n)\nGROUP BY variant\nORDER BY variant",
+          "refId": "A"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "3",
+          "value": "3"
+        },
+        "description": "Полуширина скользящего окна в точках (днях с данными). 3 = окно ±3 дня, то есть примерно 7 точек. Чем больше окно, тем сильнее сглаживаются ямы и пики.",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Сглаживание, ±точек",
+        "multi": false,
+        "name": "smoothing",
+        "options": [],
+        "query": "1 : 1,2 : 2,3 : 3,5 : 5,7 : 7",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Trends",
+  "uid": "trends",
+  "version": 1
+}

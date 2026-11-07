@@ -223,3 +223,4 @@ docs/
 # llm-analytics: сгенерированные отчёты репортёра (make report ARGS="<id> --responses")
 # logs/prompts/<file>.md и logs/responses/<file>.md
 logs/
+.scratch/

@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Средняя цена сцены по новелам в токенах, количество сцен по законченным новелам, среднее время на сцену, полная цена законченной новеллы, попадание в кэш и длина законченной новеллы в минутах.",
+  "description": "Средняя цена сцены по новелам в токенах, количество сцен по новелам, среднее время на сцену, цена новеллы в токенах, попадание в кэш и длина новеллы в минутах (длина — только true-ветка).\nПоказаны все новеллы, у которых есть LLM-вызовы в выбранном периоде, — включая незавершённые. Ось X — полный список id новелл, поэтому линии ровные: у новеллы без нужных данных точки нет (NULL), и линия её просто соединяет.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -51,7 +51,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
-      "description": "Линейный график: ось X — номер новеллы (от первой к последней), ось Y — средняя цена одной сцены в токенах. Цена сцены = сумма prompt_tokens + completion_tokens по всем вызовам этой сцены, затем среднее по сценам новеллы. Значения не округляются до целых. Новеллы без сцен не показаны.",
+      "description": "Две линии по новелам: ось X — номер новеллы, ось Y — токенов на сцену.\n- «Средняя цена сцены, токенов» — сумма prompt_tokens + completion_tokens по всем вызовам сцены, затем среднее по сценам новеллы.\n- «Из них рассуждения» — сумма reasoning_tokens по всем вызовам сцены, затем среднее по сценам новеллы. Reasoning входит в completion_tokens, поэтому эта линия всегда ниже основной.\nReasoning-токены начали попадать в логи с 7 октября: у более ранних новелл линии нет (разрыв, а не ноль).\nПоказаны все новеллы периода — завершённые и незавершённые. Ось X — полный список id новелл, поэтому линия ровная: у новеллы без сцен точки нет (NULL), и линия её просто соединяет.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -82,7 +82,7 @@
               "type": "linear"
             },
             "showPoints": "always",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -92,7 +92,7 @@
             },
             "showValues": false
           },
-          "decimals": 2,
+          "decimals": 0,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -149,6 +149,41 @@
                 "value": "left"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_reasoning_per_scene"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Из них рассуждения"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B877D9"
+                }
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Токенов на сцену"
+              },
+              {
+                "id": "custom.spanNulls",
+                "value": false
+              }
+            ]
           }
         ]
       },
@@ -164,11 +199,11 @@
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true
         },
         "tooltip": {
           "hideZeros": false,
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         },
         "xField": "novel"
@@ -182,7 +217,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    toUInt32OrZero(entity_id) AS novel,\n    avg(scene_tokens) AS avg_tokens_per_scene\nFROM (\n    SELECT\n        entity_id,\n        scene_order,\n        sum(prompt_tokens + completion_tokens) AS scene_tokens\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n)\nGROUP BY entity_id\nORDER BY novel",
+          "rawSql": "WITH\nnovels AS (\n    SELECT entity_id\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n)\nSELECT\n    toUInt32OrZero(n.entity_id) AS novel,\n    if(m.entity_id = '', NULL, m.avg_tokens_per_scene) AS avg_tokens_per_scene,\n    if(m.entity_id = '', NULL, m.avg_reasoning_per_scene) AS avg_reasoning_per_scene\nFROM novels AS n\nLEFT JOIN (\n    SELECT\n        entity_id,\n        avg(scene_tokens) AS avg_tokens_per_scene,\n        if(sum(scene_reasoning) = 0, NULL, avg(scene_reasoning)) AS avg_reasoning_per_scene\n    FROM (\n        SELECT\n            entity_id,\n            scene_order,\n            sum(prompt_tokens + completion_tokens) AS scene_tokens,\n            sum(reasoning_tokens) AS scene_reasoning\n        FROM analytics.llm_calls FINAL\n        WHERE entity_id != ''\n            AND scene_order > 0\n            AND $__timeFilter(ts)\n        GROUP BY entity_id, scene_order\n    )\n    GROUP BY entity_id\n) AS m ON m.entity_id = n.entity_id\nORDER BY novel",
           "refId": "A"
         }
       ],
@@ -195,7 +230,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
-      "description": "Линейный график только по законченным новеллам: ось X — номер новеллы, ось Y — количество сцен. Новелла считается законченной, когда сгенерировано не меньше сцен, чем запланировано в последнем roadmap (сумма scenes_count).\n\nКоличество сцен считается как число уникальных operation (scene_<N> у старых сцен, scene_<roadmap_id>_<позиция> у сцен догенерации), а не как max(scene_order): в scene_order для сцен догенерации лежит склейка roadmap_id и позиции (сцена scene_698_1 → 6981), поэтому max() давал тысячи «сцен» на новеллу.",
+      "description": "Количество сцен по новеллам: ось X — номер новеллы, ось Y — число сцен.\n\nСцена считается как уникальный operation (scene_<N> у старых сцен, scene_<roadmap_id>_<позиция> у сцен догенерации), а не как max(scene_order): в scene_order для догенерации лежит склейка roadmap_id и позиции (scene_698_1 → 6981), поэтому max() давал тысячи «сцен» на новеллу.\n\nПоказаны все новеллы периода, включая незавершённые: ось X — полный список id новелл, поэтому линия ровная. У новеллы, где сцен ещё нет, точки нет (NULL), и линия её просто соединяет.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -227,7 +262,7 @@
               "type": "linear"
             },
             "showPoints": "always",
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -327,11 +362,11 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH roads AS (\n    SELECT\n        entity_id,\n        JSONExtractArrayRaw(response, 'roadmap') AS arr\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'RoadmapGenerator'\n        AND $__timeFilter(ts)\n    ORDER BY ts DESC\n    LIMIT 1 BY entity_id\n),\nplanned AS (\n    SELECT\n        entity_id,\n        arraySum(arrayMap(x -> JSONExtractInt(x, 'scenes_count'), arr)) AS planned_scenes\n    FROM roads\n),\nscenes AS (\n    SELECT\n        entity_id,\n        uniqExact(operation) AS scenes\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n)\nSELECT\n    toUInt32OrZero(s.entity_id) AS novel,\n    s.scenes\nFROM scenes AS s\nINNER JOIN planned AS p ON s.entity_id = p.entity_id\nWHERE s.scenes >= p.planned_scenes\nORDER BY novel",
+          "rawSql": "WITH\nnovels AS (\n    SELECT entity_id\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n)\nSELECT\n    toUInt32OrZero(n.entity_id) AS novel,\n    if(m.entity_id = '', NULL, m.scenes) AS scenes\nFROM novels AS n\nLEFT JOIN (\n    SELECT\n        entity_id,\n        uniqExact(operation) AS scenes\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n) AS m ON m.entity_id = n.entity_id\nORDER BY novel",
           "refId": "A"
         }
       ],
-      "title": "Количество сцен по законченным новелам",
+      "title": "Количество сцен по новелам",
       "type": "trend",
       "pluginVersion": "12.2.0"
     },
@@ -340,7 +375,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
-      "description": "Средняя длительность одной сцены: сумма duration_ms по всем вызовам сцены, затем среднее по сценам новеллы. Ось X — номер новеллы, ось Y — секунд на сцену.",
+      "description": "Средняя длительность одной сцены: сумма duration_ms по всем вызовам сцены, затем среднее по сценам новеллы. Ось X — номер новеллы, ось Y — секунд на сцену.\n\nПоказаны все новеллы периода, включая незавершённые; ось X — полный список id новелл (у новеллы без сцен точки нет, линия её соединяет).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -373,7 +408,7 @@
             },
             "showPoints": "always",
             "showValues": false,
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -477,7 +512,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    toUInt32OrZero(entity_id) AS novel,\n    round(avg(scene_ms) / 1000, 1) AS seconds_per_scene\nFROM (\n    SELECT\n        entity_id,\n        scene_order,\n        sum(duration_ms) AS scene_ms\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n)\nGROUP BY entity_id\nORDER BY novel",
+          "rawSql": "WITH\nnovels AS (\n    SELECT entity_id\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n)\nSELECT\n    toUInt32OrZero(n.entity_id) AS novel,\n    if(m.entity_id = '', NULL, m.seconds_per_scene) AS seconds_per_scene\nFROM novels AS n\nLEFT JOIN (\n    SELECT\n        entity_id,\n        round(avg(scene_ms) / 1000, 1) AS seconds_per_scene\n    FROM (\n        SELECT\n            entity_id,\n            scene_order,\n            sum(duration_ms) AS scene_ms\n        FROM analytics.llm_calls FINAL\n        WHERE entity_id != ''\n            AND scene_order > 0\n            AND $__timeFilter(ts)\n        GROUP BY entity_id, scene_order\n    )\n    GROUP BY entity_id\n) AS m ON m.entity_id = n.entity_id\nORDER BY novel",
           "refId": "A"
         }
       ],
@@ -489,7 +524,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
-      "description": "Суммарный расход токенов на законченную новеллу: prompt_tokens + completion_tokens по всем LLM-вызовам новеллы. Законченная — новелла, где сгенерировано не меньше сцен, чем запланировано в последнем roadmap. Сцены считаются по уникальным operation (см. панель «Количество сцен по законченным новелам»).",
+      "description": "Суммарный расход токенов на новеллу: prompt_tokens + completion_tokens по всем LLM-вызовам новеллы.\n\nПоказаны все новеллы периода — завершённые и незавершённые: у незавершённых итог ещё не финальный, зато на графике нет пустых промежутков. Ось X — полный список id новелл, поэтому линия ровная.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -522,7 +557,7 @@
             },
             "showPoints": "always",
             "showValues": false,
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -622,11 +657,11 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH roads AS (\n    SELECT\n        entity_id,\n        JSONExtractArrayRaw(response, 'roadmap') AS arr\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'RoadmapGenerator'\n        AND $__timeFilter(ts)\n    ORDER BY ts DESC\n    LIMIT 1 BY entity_id\n),\nplanned AS (\n    SELECT\n        entity_id,\n        arraySum(arrayMap(x -> JSONExtractInt(x, 'scenes_count'), arr)) AS planned_scenes\n    FROM roads\n),\nscenes AS (\n    SELECT\n        entity_id,\n        uniqExact(operation) AS scenes\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n),\nfinished AS (\n    SELECT s.entity_id\n    FROM scenes AS s\n    INNER JOIN planned AS p ON s.entity_id = p.entity_id\n    WHERE s.scenes >= p.planned_scenes\n)\nSELECT\n    toUInt32OrZero(c.entity_id) AS novel,\n    sum(c.prompt_tokens + c.completion_tokens) AS tokens\nFROM analytics.llm_calls AS c FINAL\nINNER JOIN finished AS f ON c.entity_id = f.entity_id\nWHERE c.entity_id != ''\n    AND $__timeFilter(c.ts)\nGROUP BY c.entity_id\nORDER BY novel",
+          "rawSql": "WITH\nnovels AS (\n    SELECT entity_id\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n)\nSELECT\n    toUInt32OrZero(n.entity_id) AS novel,\n    if(m.entity_id = '', NULL, m.tokens) AS tokens\nFROM novels AS n\nLEFT JOIN (\n    SELECT\n        entity_id,\n        sum(prompt_tokens + completion_tokens) AS tokens\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n) AS m ON m.entity_id = n.entity_id\nORDER BY novel",
           "refId": "A"
         }
       ],
-      "title": "Цена законченной новеллы в токенах",
+      "title": "Цена новеллы в токенах",
       "type": "trend"
     },
     {
@@ -634,7 +669,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
-      "description": "Доля cached_tokens от prompt_tokens по всем LLM-вызовам новеллы, в процентах.",
+      "description": "Доля cached_tokens от prompt_tokens по всем LLM-вызовам новеллы, в процентах.\n\nПоказаны все новеллы периода, включая незавершённые; ось X — полный список id новелл, поэтому линия ровная.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -667,7 +702,7 @@
             },
             "showPoints": "always",
             "showValues": false,
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -779,7 +814,7 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    toUInt32OrZero(entity_id) AS novel,\n    round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 1) AS cache_hit_pct\nFROM analytics.llm_calls FINAL\nWHERE entity_id != ''\n    AND $__timeFilter(ts)\nGROUP BY entity_id\nORDER BY novel",
+          "rawSql": "WITH\nnovels AS (\n    SELECT entity_id\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n)\nSELECT\n    toUInt32OrZero(n.entity_id) AS novel,\n    if(m.entity_id = '', NULL, m.cache_hit_pct) AS cache_hit_pct\nFROM novels AS n\nLEFT JOIN (\n    SELECT\n        entity_id,\n        round(sum(cached_tokens) / greatest(sum(prompt_tokens), 1) * 100, 1) AS cache_hit_pct\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n) AS m ON m.entity_id = n.entity_id\nORDER BY novel",
           "refId": "A"
         }
       ],
@@ -791,7 +826,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
-      "description": "Оценка времени прочтения только законченных новелл: количество слов в тексте (описания сцен + реплики диалогов) делится на среднюю скорость чтения 200 слов/мин. Законченная — новелла, где сгенерировано не меньше сцен, чем запланировано в последнем roadmap. Сцены считаются по уникальным operation (см. панель «Количество сцен по законченным новелам»).",
+      "description": "Оценка времени прочтения: количество слов в тексте (описания сцен + реплики диалогов) делится на среднюю скорость чтения 200 слов/мин.\n\nСчитается только true-ветка: ответвления (branch_id > 0) не учитываются. Ветка определяется по operation scene_<roadmap_id>_<позиция>: берутся роадмапы из начального плана — первые N роадмапов от минимального roadmap_id новеллы, где N — число шагов в первом ответе RoadmapGenerator. Для линейных новелл (operation вида scene_<N>) фильтр ничего не отбрасывает.\n\nПоказаны все новеллы периода, включая незавершённые; ось X — полный список id новелл, поэтому линия ровная (у новеллы без текста точки нет, линия её соединяет).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -824,7 +859,7 @@
             },
             "showPoints": "always",
             "showValues": false,
-            "spanNulls": false,
+            "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -928,11 +963,11 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "WITH roads AS (\n    SELECT\n        entity_id,\n        JSONExtractArrayRaw(response, 'roadmap') AS arr\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'RoadmapGenerator'\n        AND $__timeFilter(ts)\n    ORDER BY ts DESC\n    LIMIT 1 BY entity_id\n),\nplanned AS (\n    SELECT\n        entity_id,\n        arraySum(arrayMap(x -> JSONExtractInt(x, 'scenes_count'), arr)) AS planned_scenes\n    FROM roads\n),\nactual_scenes AS (\n    SELECT\n        entity_id,\n        uniqExact(operation) AS scenes\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n),\nfinished AS (\n    SELECT a.entity_id\n    FROM actual_scenes AS a\n    INNER JOIN planned AS p ON a.entity_id = p.entity_id\n    WHERE a.scenes >= p.planned_scenes\n),\nscene_text AS (\n    SELECT\n        entity_id,\n        scene_order,\n        argMax(\n            concat(\n                JSONExtractString(response, 'title'),\n                ' ',\n                JSONExtractString(response, 'description')\n            ),\n            ts\n        ) AS text\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'SceneGenerator'\n        AND scene_order > 0\n        AND response != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n),\ndialogue_text AS (\n    SELECT\n        entity_id,\n        scene_order,\n        argMax(\n            arrayStringConcat(\n                arrayMap(\n                    x -> JSONExtractString(x, 'text'),\n                    JSONExtractArrayRaw(response, 'dialogue_lines')\n                ),\n                ' '\n            ),\n            ts\n        ) AS text\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'DialogueGenerator'\n        AND scene_order > 0\n        AND response != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order\n),\nall_text AS (\n    SELECT entity_id, scene_order, text FROM scene_text\n    UNION ALL\n    SELECT entity_id, scene_order, text FROM dialogue_text\n)\nSELECT\n    toUInt32OrZero(entity_id) AS novel,\n    round(sum(length(splitByNonAlpha(text))) / 200, 1) AS minutes\nFROM all_text\nWHERE entity_id IN (SELECT entity_id FROM finished)\nGROUP BY entity_id\nORDER BY novel",
+          "rawSql": "WITH\nnovels AS (\n    SELECT entity_id\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n),\nscene_ops AS (\n    SELECT\n        entity_id,\n        operation,\n        splitByChar('_', operation) AS parts\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, operation, parts\n),\nroadmap_base AS (\n    SELECT\n        entity_id,\n        minIf(toUInt32OrZero(parts[2]), length(parts) = 3) AS base_roadmap\n    FROM scene_ops\n    GROUP BY entity_id\n),\ntrue_plan AS (\n    SELECT\n        entity_id,\n        length(JSONExtractArrayRaw(response, 'roadmap')) AS steps\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'RoadmapGenerator'\n        AND response != ''\n    ORDER BY ts ASC\n    LIMIT 1 BY entity_id\n),\ntrue_scenes AS (\n    SELECT\n        o.entity_id AS entity_id,\n        o.operation AS operation\n    FROM scene_ops AS o\n    LEFT JOIN roadmap_base AS b ON b.entity_id = o.entity_id\n    LEFT JOIN true_plan AS t ON t.entity_id = o.entity_id\n    WHERE length(o.parts) <> 3\n        OR ifNull(t.steps, 0) = 0\n        OR toUInt32OrZero(o.parts[2]) < b.base_roadmap + t.steps\n),\nscene_text AS (\n    SELECT\n        entity_id,\n        operation,\n        argMax(\n            concat(\n                JSONExtractString(response, 'title'),\n                ' ',\n                JSONExtractString(response, 'description')\n            ),\n            ts\n        ) AS text\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'SceneGenerator'\n        AND scene_order > 0\n        AND response != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, operation\n),\ndialogue_text AS (\n    SELECT\n        entity_id,\n        operation,\n        argMax(\n            arrayStringConcat(\n                arrayMap(\n                    x -> JSONExtractString(x, 'text'),\n                    JSONExtractArrayRaw(response, 'dialogue_lines')\n                ),\n                ' '\n            ),\n            ts\n        ) AS text\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND step = 'DialogueGenerator'\n        AND scene_order > 0\n        AND response != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, operation\n),\nall_text AS (\n    SELECT entity_id, operation, length(splitByNonAlpha(text)) AS words FROM scene_text\n    UNION ALL\n    SELECT entity_id, operation, length(splitByNonAlpha(text)) AS words FROM dialogue_text\n),\nnovel_words AS (\n    SELECT\n        a.entity_id AS entity_id,\n        sum(a.words) AS words\n    FROM all_text AS a\n    INNER JOIN true_scenes AS t\n        ON t.entity_id = a.entity_id\n        AND t.operation = a.operation\n    GROUP BY a.entity_id\n)\nSELECT\n    toUInt32OrZero(n.entity_id) AS novel,\n    if(w.entity_id = '', NULL, round(w.words / 200, 1)) AS minutes\nFROM novels AS n\nLEFT JOIN novel_words AS w ON w.entity_id = n.entity_id\nORDER BY novel",
           "refId": "A"
         }
       ],
-      "title": "Длина законченной новеллы в минутах",
+      "title": "Длина новеллы в минутах",
       "type": "trend"
     },
     {
@@ -940,7 +975,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
       },
-      "description": "Повторные LLM-вызовы по новеллам в разбивке по этапам сцены. Считается как «вызовов сверх первого на сцену»: count(step) − 1 по каждой паре (новелла, сцена), затем сумма по новелле.\n- Сцена (SceneGenerator) — пересоздание сцены: ретраи валидации по роадмапу (до 3 на сцену).\n- Валидация (SceneRoadmapValidator) — повторные проверки, сопровождающие каждый ретрай сцены.\n- Диалог (DialogueGenerator) — повторные генерации диалога (полные пересборки новеллы).\n- Контекст (StoryContextGenerator) — исторически 3 вызова на сцену (генерация + проверка дублей + проверка противоречий); в текущем коде 1 вызов, поэтому в свежих данных ≈ 0.\nДанные до 12 октября не содержат SceneRoadmapValidator (валидатор появился позже): там повторы — это полные пересборки сцены (дублируются SceneGenerator, DialogueGenerator, контекст).",
+      "description": "Повторные LLM-вызовы по новеллам в разбивке по этапам сцены — столбчатая диаграмма, стек по этапам.\nСчитается как «вызовов сверх первого на сцену»: count(step) − 1 по каждой паре (новелла, сцена), затем сумма по новелле.\n- Сцена (SceneGenerator) — пересоздание сцены: ретраи валидации по роадмапу (до 3 на сцену).\n- Валидация (SceneRoadmapValidator) — повторные проверки, сопровождающие каждый ретрай сцены (поэтому столбик валидации почти всегда повторяет столбик сцены).\n- Диалог (DialogueGenerator) — повторные генерации диалога (полные пересборки новеллы).\n- Контекст (StoryContextGenerator) — исторически 3 вызова на сцену (генерация + проверка дублей + проверка противоречий); в текущем коде 1 вызов, поэтому в свежих данных ≈ 0.\nПоказаны все новеллы периода: у большинства пересозданий нет, поэтому столбиков нет. Данные до 12 октября не содержат SceneRoadmapValidator (валидатор появился позже): там повторы — это полные пересборки сцены (дублируются SceneGenerator, DialogueGenerator, контекст).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -950,10 +985,12 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisGridShow": true,
             "axisLabel": "Повторных вызовов",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
+            "barWidthFactor": 0.7,
+            "drawStyle": "bars",
             "fillOpacity": 80,
             "gradientMode": "none",
             "hideFrom": {
@@ -961,14 +998,25 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
             "lineWidth": 1,
+            "pointSize": 3,
             "scaleDistribution": {
               "type": "linear"
             },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
             "thresholdsStyle": {
               "mode": "off"
-            }
+            },
+            "showValues": false
           },
+          "decimals": 0,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -991,6 +1039,18 @@
               {
                 "id": "displayName",
                 "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Номер новеллы"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "bottom"
+              },
+              {
+                "id": "decimals",
+                "value": 0
               }
             ]
           },
@@ -1003,6 +1063,17 @@
               {
                 "id": "displayName",
                 "value": "Сцена (SceneGenerator)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#7EB26D"
+                }
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Повторных вызовов"
               }
             ]
           },
@@ -1015,6 +1086,17 @@
               {
                 "id": "displayName",
                 "value": "Валидация (SceneRoadmapValidator)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#EAB839"
+                }
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Повторных вызовов"
               }
             ]
           },
@@ -1027,6 +1109,17 @@
               {
                 "id": "displayName",
                 "value": "Диалог (DialogueGenerator)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#6ED0E0"
+                }
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Повторных вызовов"
               }
             ]
           },
@@ -1039,6 +1132,17 @@
               {
                 "id": "displayName",
                 "value": "Контекст (StoryContextGenerator)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#EF843C"
+                }
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Повторных вызовов"
               }
             ]
           }
@@ -1052,26 +1156,18 @@
       },
       "id": 11,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
-        "orientation": "auto",
-        "showValue": "auto",
-        "stacking": "normal",
         "tooltip": {
           "hideZeros": true,
           "mode": "multi",
           "sort": "desc"
         },
-        "xTickLabelRotation": -45,
-        "xTickLabelSpacing": 0
+        "xField": "novel"
       },
       "targets": [
         {
@@ -1082,12 +1178,12 @@
           "editorType": "sql",
           "format": 1,
           "queryType": "table",
-          "rawSql": "SELECT\n    toString(toUInt32OrZero(entity_id)) AS novel,\n    sumIf(calls - 1, step = 'SceneGenerator') AS scene_retries,\n    sumIf(calls - 1, step = 'SceneRoadmapValidator') AS validator_extra,\n    sumIf(calls - 1, step = 'DialogueGenerator') AS dialogue_extra,\n    sumIf(calls - 1, step = 'StoryContextGenerator') AS context_extra\nFROM (\n    SELECT\n        entity_id,\n        scene_order,\n        step,\n        count() AS calls\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND scene_order > 0\n        AND $__timeFilter(ts)\n    GROUP BY entity_id, scene_order, step\n)\nGROUP BY entity_id\nHAVING scene_retries + validator_extra + dialogue_extra + context_extra > 0\nORDER BY toUInt32OrZero(entity_id)",
+          "rawSql": "WITH\nnovels AS (\n    SELECT entity_id\n    FROM analytics.llm_calls FINAL\n    WHERE entity_id != ''\n        AND $__timeFilter(ts)\n    GROUP BY entity_id\n)\nSELECT\n    toUInt32OrZero(n.entity_id) AS novel,\n    if(m.entity_id = '', NULL, m.scene_retries) AS scene_retries,\n    if(m.entity_id = '', NULL, m.validator_extra) AS validator_extra,\n    if(m.entity_id = '', NULL, m.dialogue_extra) AS dialogue_extra,\n    if(m.entity_id = '', NULL, m.context_extra) AS context_extra\nFROM novels AS n\nLEFT JOIN (\n    SELECT\n        entity_id,\n        sumIf(calls - 1, step = 'SceneGenerator') AS scene_retries,\n        sumIf(calls - 1, step = 'SceneRoadmapValidator') AS validator_extra,\n        sumIf(calls - 1, step = 'DialogueGenerator') AS dialogue_extra,\n        sumIf(calls - 1, step = 'StoryContextGenerator') AS context_extra\n    FROM (\n        SELECT\n            entity_id,\n            scene_order,\n            step,\n            count() AS calls\n        FROM analytics.llm_calls FINAL\n        WHERE entity_id != ''\n            AND scene_order > 0\n            AND $__timeFilter(ts)\n        GROUP BY entity_id, scene_order, step\n    )\n    GROUP BY entity_id\n) AS m ON m.entity_id = n.entity_id\nORDER BY novel",
           "refId": "A"
         }
       ],
       "title": "Повторные LLM-вызовы по этапам (пересоздания)",
-      "type": "barchart",
+      "type": "trend",
       "pluginVersion": "12.2.0"
     }
   ],
